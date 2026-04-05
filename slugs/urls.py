@@ -1,7 +1,8 @@
-from django.urls import path, include
+from django.urls import path
 from .views import *
-from rest_framework.routers import DefaultRouter
 
 urlpatterns = [
-    path('',home),
+    path('', home),
+    path('slugs/', slugs_list, name='slugs-list'),
+    path('slugs/<str:slug_name>/', slug_detail, name='slug-detail'),
 ]
