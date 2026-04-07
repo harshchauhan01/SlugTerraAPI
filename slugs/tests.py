@@ -31,3 +31,31 @@ class SlugsApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("total_slugs", response.data)
         self.assertIn("elements", response.data)
+
+    def test_slug_duel_returns_simulation(self):
+        response = self.client.get(
+            "/api/slugs/duel/",
+            {"slug_a": "Aquabeek", "slug_b": "Infurnus", "rounds": 3, "seed": 7},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["slug_a"], "Aquabeek")
+        self.assertEqual(response.data["slug_b"], "Infurnus")
+        self.assertEqual(response.data["rounds_requested"], 3)
+        self.assertEqual(len(response.data["result"]["rounds"]), 3)
+        self.assertIn("winner", response.data["result"])
+
+    def test_slug_duel_requires_both_slugs(self):
+        response = self.client.get("/api/slugs/duel/", {"slug_a": "Aquabeek"})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("detail", response.data)
+
+    def test_slug_duel_returns_not_found(self):
+        response = self.client.get(
+            "/api/slugs/duel/",
+            {"slug_a": "Unknown One", "slug_b": "Infurnus"},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("detail", response.data)
