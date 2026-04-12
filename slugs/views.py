@@ -3,12 +3,15 @@ import random
 from collections import Counter
 from pathlib import Path
 
+from django.core.cache import cache
 from rest_framework.decorators import api_view
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 
 DATA_FILE = Path(__file__).resolve().parents[1] / "slugs_data.json"
+CACHE_KEY_PREFIX = "slugs:data"
+CACHE_TTL_SECONDS = 300
 PAGE_SIZE = 24
 RARITY_SCORE = {
     "one-of-a-kind": 7,
@@ -37,9 +40,19 @@ def _normalize(value):
 
 
 def _load_slugs_data():
-    """Read and parse slug data from the project JSON file."""
+    """Read slug data with Redis-backed caching to avoid repeated disk I/O."""
+    cache_version = int(DATA_FILE.stat().st_mtime)
+    cache_key = f"{CACHE_KEY_PREFIX}:{cache_version}"
+
+    cached_data = cache.get(cache_key)
+    if cached_data is not None:
+        return cached_data
+
     with DATA_FILE.open("r", encoding="utf-8") as data_file:
-        return json.load(data_file)
+        data = json.load(data_file)
+
+    cache.set(cache_key, data, timeout=CACHE_TTL_SECONDS)
+    return data
 
 
 def _find_slug(slugs, slug_name):
