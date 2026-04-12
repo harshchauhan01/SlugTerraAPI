@@ -35,7 +35,7 @@ FROM base as development
 
 COPY requirements/base.txt requirements/dev.txt ./
 
-COPY pip install --upgrade pip && \
+RUN pip install --upgrade pip && \
     pip install -r dev.txt
 
 COPY . .
