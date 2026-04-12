@@ -3,3 +3,10 @@ __pycache__/
 .env
 .git
 node_modules
+venv/
+.venv/
+*.sqlite3
+slug_images/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/

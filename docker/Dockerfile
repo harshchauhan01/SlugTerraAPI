@@ -12,19 +12,23 @@ RUN apt-get update && apt-get install -y \
     netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
-FROM base AS builder
+FROM base AS dev-deps
 
 COPY requirements/base.txt /app/requirements/base.txt
-COPY requirements/prod.txt /app/requirements/prod.txt
 COPY requirements/dev.txt /app/requirements/dev.txt
 
 RUN pip install --upgrade pip && \
-    pip wheel --no-cache-dir --no-deps -r /app/requirements/dev.txt -w /wheels
+    pip install --no-cache-dir -r /app/requirements/dev.txt
 
-FROM base AS development
+FROM base AS prod-builder
 
-COPY --from=builder /wheels /wheels
-RUN pip install /wheels/*
+COPY requirements/base.txt /app/requirements/base.txt
+COPY requirements/prod.txt /app/requirements/prod.txt
+
+RUN pip install --upgrade pip && \
+    pip wheel --no-cache-dir --no-deps -r /app/requirements/prod.txt -w /wheels
+
+FROM dev-deps AS development
 
 COPY . /app
 
@@ -35,7 +39,7 @@ CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 
 FROM base AS production
 
-COPY --from=builder /wheels /wheels
+COPY --from=prod-builder /wheels /wheels
 RUN pip install /wheels/*
 
 COPY . /app
