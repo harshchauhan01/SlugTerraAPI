@@ -85,6 +85,10 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 import os
 
+
+def _env_bool(name, default=False):
+    return os.getenv(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}
+
 DATABASES = {
     'default': {
         "ENGINE": "django.db.backends.postgresql",
@@ -97,6 +101,7 @@ DATABASES = {
 }
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/1")
+LOAD_TEST_MODE = _env_bool("LOAD_TEST_MODE", False)
 
 CACHES = {
     "default": {
@@ -155,13 +160,19 @@ REST_FRAMEWORK = {
         'django_filters.rest_framework.DjangoFilterBackend',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle',
-    ],
-    'DEFAULT_THROTTLE_RATES': {
-        'anon': '60/minute',
-        'user': '300/minute',
-    },
     'PAGE_SIZE': 24,
 }
+
+if not LOAD_TEST_MODE:
+    REST_FRAMEWORK.update(
+        {
+            'DEFAULT_THROTTLE_CLASSES': [
+                'rest_framework.throttling.AnonRateThrottle',
+                'rest_framework.throttling.UserRateThrottle',
+            ],
+            'DEFAULT_THROTTLE_RATES': {
+                'anon': '60/minute',
+                'user': '300/minute',
+            },
+        }
+    )
