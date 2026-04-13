@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slugapp
+  namespace: slugapi-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slugapp
+  template:
+    metadata:
+      labels:
+        app: slugapp
+    spec:
+      containers:
+      - name: slugapp-cont
+        image: harshchauhan01/slug-api:latest
+        ports:
+        - containerPort: 8000
+        
