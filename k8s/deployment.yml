@@ -14,8 +14,11 @@ spec:
         app: slugapp
     spec:
       containers:
-      - name: slugapp-cont
+      - name: slugapp
         image: harshchauhan01/slug-api:latest
         ports:
         - containerPort: 8000
-        
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
