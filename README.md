@@ -238,6 +238,29 @@ kubectl delete -f k8s/namespace.yml
 - If you build your own image, push it to a registry and update the `image` field before applying.
 - A local kind cluster config exists at `kind-cluster/kind-config.yml`.
 
+## Monitoring with Prometheus and Grafana
+
+You can run Prometheus and Grafana as standalone containers alongside the app.
+
+From `config/` folder:
+
+```bash
+docker run -d --name prometheus --restart unless-stopped -p 9090:9090 prom/prometheus:latest
+docker run -d --name grafana --restart unless-stopped -p 3000:3000 -e GF_SECURITY_ADMIN_USER=admin -e GF_SECURITY_ADMIN_PASSWORD=admin grafana/grafana:latest
+```
+
+Open the UIs:
+
+- Prometheus: http://127.0.0.1:9090/
+- Grafana: http://127.0.0.1:3000/
+
+Default Grafana login:
+
+- Username: admin
+- Password: admin
+
+If you want Prometheus to scrape this API, add a scrape configuration that targets the app's metrics endpoint.
+
 ## API Documentation UI
 
 After server startup:
