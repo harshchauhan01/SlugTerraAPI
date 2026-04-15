@@ -13,12 +13,13 @@ This project serves slug information from a JSON dataset and exposes it through 
 5. Prerequisites
 6. Quick Start (Local)
 7. Running with Docker
-8. API Documentation UI
-9. API Endpoints
-10. Load Testing with Locust
-11. Data Source and Image Assets
-12. Troubleshooting
-13. Notes for Production
+8. Running on Kubernetes
+9. API Documentation UI
+10. API Endpoints
+11. Load Testing with Locust
+12. Data Source and Image Assets
+13. Troubleshooting
+14. Notes for Production
 
 ## Project Overview
 
@@ -86,6 +87,7 @@ SlugTerraAPI/
 - pip
 - Git (optional)
 - Docker Desktop (optional, if running containerized)
+- kubectl + a Kubernetes cluster (optional, if running on Kubernetes)
 
 ## Quick Start (Local)
 
@@ -131,16 +133,110 @@ Server default:
 
 ## Running with Docker
 
+Use Docker Compose for local containerized development (includes PostgreSQL + Redis).
+
+### 1. Build image (optional)
+
 From repository root:
 
 ```bash
-docker build -f config/Dockerfile -t slugterra-api .
-docker run --rm -p 8000:8000 slugterra-api
+docker build -f config/docker/Dockerfile -t slugterra-api:dev config
+```
+
+### 2. Start with Docker Compose
+
+From `config/` folder:
+
+```bash
+docker compose up --build
+```
+
+Run in detached mode:
+
+```bash
+docker compose up --build -d
+```
+
+Stop and remove containers:
+
+```bash
+docker compose down
+```
+
+Stop and remove containers + volumes (removes PostgreSQL data):
+
+```bash
+docker compose down -v
+```
+
+Useful commands:
+
+```bash
+docker compose ps
+docker compose logs -f web
+docker compose exec web python manage.py createsuperuser
+```
+
+Default exposed ports in this setup:
+
+- API app: 8000
+- PostgreSQL: 5432
+- Redis: 6379
+
+## Running on Kubernetes
+
+Kubernetes manifests are available in `k8s/`:
+
+- `k8s/namespace.yml`
+- `k8s/deployment.yml`
+- `k8s/service.yml`
+- `k8s/hpa.yml`
+
+### 1. Apply manifests
+
+From `config/` folder:
+
+```bash
+kubectl apply -f k8s/namespace.yml
+kubectl apply -f k8s/deployment.yml
+kubectl apply -f k8s/service.yml
+kubectl apply -f k8s/hpa.yml
+```
+
+### 2. Verify resources
+
+```bash
+kubectl get ns
+kubectl get deploy,svc,hpa -n slugapi-ns
+kubectl get pods -n slugapi-ns -w
+```
+
+### 3. Access the API locally
+
+The service is `ClusterIP`, so use port-forward:
+
+```bash
+kubectl port-forward -n slugapi-ns service/slugapp 8000:80
 ```
 
 Then open:
 
 - http://127.0.0.1:8000/
+
+### 4. Clean up
+
+```bash
+kubectl delete -f k8s/hpa.yml
+kubectl delete -f k8s/service.yml
+kubectl delete -f k8s/deployment.yml
+kubectl delete -f k8s/namespace.yml
+```
+
+### Notes
+
+- Current deployment image in `k8s/deployment.yml` is `harshchauhan01/slug-api:latest`.
+- If you build your own image, push it to a registry and update the `image` field before applying.
+- A local kind cluster config exists at `kind-cluster/kind-config.yml`.
 
 ## API Documentation UI
 
