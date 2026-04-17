@@ -89,29 +89,62 @@ import os
 def _env_bool(name, default=False):
     return os.getenv(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}
 
-DATABASES = {
-    'default': {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("POSTGRES_DB", "django"),
-        "USER": os.getenv("POSTGRES_USER", "postgres"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "postgres"),
-        "HOST": os.getenv("POSTGRES_HOST", "db"),
-        "PORT": os.getenv("POSTGRES_PORT", "5432"),
-    }
-}
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/1")
-LOAD_TEST_MODE = _env_bool("LOAD_TEST_MODE", False)
+def _env_list(name, default):
+    raw_value = os.getenv(name, "")
+    if not raw_value:
+        return default
 
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": REDIS_URL,
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+    values = [item.strip() for item in raw_value.split(",") if item.strip()]
+    return values or default
+
+DEBUG = _env_bool("DJANGO_DEBUG", True)
+
+ALLOWED_HOSTS = _env_list(
+    "DJANGO_ALLOWED_HOSTS",
+    ["localhost", "127.0.0.1", "[::1]"],
+)
+
+postgres_host = os.getenv("POSTGRES_HOST")
+if postgres_host:
+    DATABASES = {
+        'default': {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("POSTGRES_DB", "django"),
+            "USER": os.getenv("POSTGRES_USER", "postgres"),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD", "postgres"),
+            "HOST": postgres_host,
+            "PORT": os.getenv("POSTGRES_PORT", "5432"),
         }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+
+REDIS_URL = os.getenv("REDIS_URL")
+LOAD_TEST_MODE = _env_bool("LOAD_TEST_MODE", False)
+
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            }
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "slugterra-local-cache",
+        }
+    }
 
 
 # Password validation

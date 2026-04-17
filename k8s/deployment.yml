@@ -16,8 +16,26 @@ spec:
       containers:
       - name: slugapp
         image: harshchauhan01/slug-api:latest
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
+        env:
+        - name: DJANGO_DEBUG
+          value: "False"
+        - name: DJANGO_ALLOWED_HOSTS
+          value: "slugapp,slugapp.slugapi-ns,slugapp.slugapi-ns.svc,slugapp.slugapi-ns.svc.cluster.local,localhost,127.0.0.1,[::1]"
+        - name: POSTGRES_DB
+          value: "django"
+        - name: POSTGRES_USER
+          value: "postgres"
+        - name: POSTGRES_PASSWORD
+          value: "postgres"
+        - name: POSTGRES_HOST
+          value: "db"
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: REDIS_URL
+          value: "redis://redis:6379/1"
         resources:
           requests:
             cpu: "100m"

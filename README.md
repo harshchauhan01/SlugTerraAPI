@@ -188,8 +188,11 @@ Default exposed ports in this setup:
 Kubernetes manifests are available in `k8s/`:
 
 - `k8s/namespace.yml`
+- `k8s/postgres.yml`
+- `k8s/redis.yml`
 - `k8s/deployment.yml`
 - `k8s/service.yml`
+- `k8s/ingress.yml`
 - `k8s/hpa.yml`
 
 ### 1. Apply manifests
@@ -198,8 +201,11 @@ From `config/` folder:
 
 ```bash
 kubectl apply -f k8s/namespace.yml
+kubectl apply -f k8s/postgres.yml
+kubectl apply -f k8s/redis.yml
 kubectl apply -f k8s/deployment.yml
 kubectl apply -f k8s/service.yml
+kubectl apply -f k8s/ingress.yml
 kubectl apply -f k8s/hpa.yml
 ```
 
@@ -207,13 +213,23 @@ kubectl apply -f k8s/hpa.yml
 
 ```bash
 kubectl get ns
-kubectl get deploy,svc,hpa -n slugapi-ns
+kubectl get deploy,svc,ingress,hpa -n slugapi-ns
 kubectl get pods -n slugapi-ns -w
 ```
 
 ### 3. Access the API locally
 
-The service is `ClusterIP`, so use port-forward:
+If you have an ingress controller installed, port-forward it to loopback:
+
+```bash
+kubectl port-forward -n ingress-nginx service/ingress-nginx-controller 80:80
+```
+
+Then open:
+
+- http://127.0.0.1/
+
+If you do not have ingress running, use port-forward on the `ClusterIP` service:
 
 ```bash
 kubectl port-forward -n slugapi-ns service/slugapp 8000:80
@@ -227,6 +243,7 @@ Then open:
 
 ```bash
 kubectl delete -f k8s/hpa.yml
+kubectl delete -f k8s/ingress.yml
 kubectl delete -f k8s/service.yml
 kubectl delete -f k8s/deployment.yml
 kubectl delete -f k8s/namespace.yml
@@ -237,6 +254,9 @@ kubectl delete -f k8s/namespace.yml
 - Current deployment image in `k8s/deployment.yml` is `harshchauhan01/slug-api:latest`.
 - If you build your own image, push it to a registry and update the `image` field before applying.
 - A local kind cluster config exists at `kind-cluster/kind-config.yml`.
+- The app deployment expects the PostgreSQL service name `db` and Redis service name `redis`.
+- The ingress rule does not use a host because Kubernetes ingress hosts must be DNS names, not IP addresses.
+- To keep access on `127.0.0.1` only, port-forward the ingress controller to `127.0.0.1:80`.
 
 ## Monitoring with Prometheus and Grafana
 
