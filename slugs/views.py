@@ -1,6 +1,7 @@
 import json
 import random
 from collections import Counter
+from functools import lru_cache
 from pathlib import Path
 
 from django.core.cache import cache
@@ -13,6 +14,7 @@ DATA_FILE = Path(__file__).resolve().parents[1] / "slugs_data.json"
 CACHE_KEY_PREFIX = "slugs:data"
 CACHE_TTL_SECONDS = 300
 PAGE_SIZE = 24
+MAX_PAGE_SIZE = 100
 RARITY_SCORE = {
     "one-of-a-kind": 7,
     "ultra rare": 6,
@@ -39,28 +41,63 @@ def _normalize(value):
     return value.strip().lower()
 
 
+def _get_data_version():
+    stat = DATA_FILE.stat()
+    return f"{stat.st_mtime_ns}:{stat.st_size}"
+
+
+@lru_cache(maxsize=2)
+def _build_dataset(data_version):
+    with DATA_FILE.open("r", encoding="utf-8") as data_file:
+        slugs = json.load(data_file)
+
+    slug_map = {}
+    search_index = []
+
+    for slug in slugs:
+        slug_name = slug.get("slug-name", "")
+        info = slug.get("info", {})
+
+        slug_name_norm = _normalize(slug_name)
+        slug_element_norm = _normalize(info.get("element", ""))
+        slug_rarity_norm = _normalize(info.get("rarity", ""))
+        slug_power_type_norm = _normalize(info.get("power_type", ""))
+
+        slug_map[slug_name_norm] = slug
+        search_index.append(
+            {
+                "slug": slug,
+                "slug_name": slug_name_norm,
+                "element": slug_element_norm,
+                "rarity": slug_rarity_norm,
+                "power_type": slug_power_type_norm,
+            }
+        )
+
+    return {
+        "slugs": slugs,
+        "slug_map": slug_map,
+        "search_index": search_index,
+        "stats": _build_stats(slugs),
+    }
+
+
 def _load_slugs_data():
-    """Read slug data with Redis-backed caching to avoid repeated disk I/O."""
-    cache_version = int(DATA_FILE.stat().st_mtime)
+    """Read slug dataset with cache-backed precomputed indexes."""
+    cache_version = _get_data_version()
     cache_key = f"{CACHE_KEY_PREFIX}:{cache_version}"
 
-    cached_data = cache.get(cache_key)
-    if cached_data is not None:
-        return cached_data
+    dataset = cache.get(cache_key)
+    if dataset is not None:
+        return dataset
 
-    with DATA_FILE.open("r", encoding="utf-8") as data_file:
-        data = json.load(data_file)
-
-    cache.set(cache_key, data, timeout=CACHE_TTL_SECONDS)
-    return data
+    dataset = _build_dataset(cache_version)
+    cache.set(cache_key, dataset, timeout=CACHE_TTL_SECONDS)
+    return dataset
 
 
-def _find_slug(slugs, slug_name):
-    target_name = _normalize(slug_name)
-    for slug in slugs:
-        if _normalize(slug.get("slug-name", "")) == target_name:
-            return slug
-    return None
+def _find_slug(slug_map, slug_name):
+    return slug_map.get(_normalize(slug_name))
 
 
 def _safe_int(value, default):
@@ -157,30 +194,29 @@ def _simulate_duel(slug_a, slug_b, rounds, seed):
     }
 
 
-def _filter_slugs(slugs, search="", element="", rarity="", power_type=""):
+def _filter_slugs(search_index, search="", element="", rarity="", power_type=""):
     search = _normalize(search)
     element = _normalize(element)
     rarity = _normalize(rarity)
     power_type = _normalize(power_type)
 
     filtered_slugs = []
-    for slug in slugs:
-        slug_name = slug.get("slug-name", "")
-        info = slug.get("info", {})
-        slug_element = info.get("element", "")
-        slug_rarity = info.get("rarity", "")
-        slug_power_type = info.get("power_type", "")
+    for indexed_slug in search_index:
+        slug_name = indexed_slug["slug_name"]
+        slug_element = indexed_slug["element"]
+        slug_rarity = indexed_slug["rarity"]
+        slug_power_type = indexed_slug["power_type"]
 
-        if search and search not in _normalize(slug_name):
+        if search and search not in slug_name:
             continue
-        if element and element != _normalize(slug_element):
+        if element and element != slug_element:
             continue
-        if rarity and rarity != _normalize(slug_rarity):
+        if rarity and rarity != slug_rarity:
             continue
-        if power_type and power_type not in _normalize(slug_power_type):
+        if power_type and power_type not in slug_power_type:
             continue
 
-        filtered_slugs.append(slug)
+        filtered_slugs.append(indexed_slug["slug"])
 
     return filtered_slugs
 
@@ -214,17 +250,17 @@ def _get_page_size(request):
         return PAGE_SIZE
 
     try:
-        return max(1, int(requested_page_size))
+        return max(1, min(int(requested_page_size), MAX_PAGE_SIZE))
     except (TypeError, ValueError):
         return PAGE_SIZE
 
 @api_view(["GET"])
 def home(request):
-    slugs = _load_slugs_data()
+    dataset = _load_slugs_data()
     return Response(
         {
             "message": "Welcome to the SlugTerra API.",
-            "total_slugs": len(slugs),
+            "total_slugs": len(dataset["slugs"]),
             "endpoints": {
                 "list": "/api/slugs/",
                 "detail": "/api/slugs/<slug-name>/",
@@ -240,9 +276,9 @@ def home(request):
 @api_view(["GET"])
 def slugs_list(request):
     """Return slugs with optional filtering and pagination."""
-    slugs = _load_slugs_data()
+    dataset = _load_slugs_data()
     slugs = _filter_slugs(
-        slugs,
+        dataset["search_index"],
         search=request.query_params.get("search", ""),
         element=request.query_params.get("element", ""),
         rarity=request.query_params.get("rarity", ""),
@@ -260,8 +296,8 @@ def slugs_list(request):
 
 @api_view(["GET"])
 def slugs_stats(request):
-    slugs = _load_slugs_data()
-    return Response(_build_stats(slugs))
+    dataset = _load_slugs_data()
+    return Response(dataset["stats"])
 
 
 @api_view(["GET"])
@@ -279,9 +315,9 @@ def slugs_duel(request):
     rounds = max(1, min(rounds, 9))
     seed = _safe_int(request.query_params.get("seed", 0), 0)
 
-    slugs = _load_slugs_data()
-    slug_a = _find_slug(slugs, slug_a_name)
-    slug_b = _find_slug(slugs, slug_b_name)
+    dataset = _load_slugs_data()
+    slug_a = _find_slug(dataset["slug_map"], slug_a_name)
+    slug_b = _find_slug(dataset["slug_map"], slug_b_name)
 
     if not slug_a or not slug_b:
         return Response(
@@ -305,8 +341,8 @@ def slugs_duel(request):
 @api_view(["GET"])
 def slug_detail(request, slug_name):
     """Return one slug by exact name (case-insensitive)."""
-    slugs = _load_slugs_data()
-    slug = _find_slug(slugs, slug_name)
+    dataset = _load_slugs_data()
+    slug = _find_slug(dataset["slug_map"], slug_name)
     if slug:
         return Response(slug)
 

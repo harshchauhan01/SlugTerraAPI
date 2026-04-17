@@ -19,6 +19,12 @@ class SlugsApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertGreaterEqual(response.data["count"], 1)
 
+    def test_slug_list_caps_page_size(self):
+        response = self.client.get("/api/slugs/", {"page_size": 10000})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(len(response.data["results"]), 100)
+
     def test_slug_detail_returns_matching_slug(self):
         response = self.client.get("/api/slugs/Air Elemental/")
 
