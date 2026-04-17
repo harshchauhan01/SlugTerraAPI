@@ -1,5 +1,8 @@
 FROM python:3.12-slim AS base
 
+# This Dockerfile expects the build context to be the config directory.
+# Example: docker build -f docker/Dockerfile -t <image>:<tag> .
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
@@ -30,7 +33,11 @@ RUN pip install --upgrade pip && \
 
 FROM dev-deps AS development
 
-COPY . /app
+COPY manage.py /app/manage.py
+COPY config /app/config
+COPY slugs /app/slugs
+COPY slugs_data.json /app/slugs_data.json
+COPY docker /app/docker
 
 RUN chmod +x /app/docker/entrypoint.sh
 
@@ -42,7 +49,11 @@ FROM base AS production
 COPY --from=prod-builder /wheels /wheels
 RUN pip install /wheels/*
 
-COPY . /app
+COPY manage.py /app/manage.py
+COPY config /app/config
+COPY slugs /app/slugs
+COPY slugs_data.json /app/slugs_data.json
+COPY docker /app/docker
 
 RUN chmod +x /app/docker/entrypoint.sh
 
