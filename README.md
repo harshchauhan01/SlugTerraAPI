@@ -469,5 +469,16 @@ Current defaults are development-oriented. Before production deployment:
 
 ## License
 
-No license file is currently included in this repository.
-Add one if you plan to distribute or open-source this project.
+This project is open source under the MIT License.
+
+See the LICENSE file at the repository root for the full text.
+
+## Contributing
+
+Contributions are welcome.
+
+1. Fork the repository.
+2. Create a feature branch.
+3. Make your changes with clear commit messages.
+4. Add or update tests/docs where relevant.
+5. Open a pull request describing what changed and why.
