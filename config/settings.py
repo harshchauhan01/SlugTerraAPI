@@ -127,6 +127,10 @@ else:
 
 REDIS_URL = os.getenv("REDIS_URL")
 LOAD_TEST_MODE = _env_bool("LOAD_TEST_MODE", False)
+ENABLE_RATE_LIMITING = _env_bool(
+    "ENABLE_RATE_LIMITING",
+    (not DEBUG and not LOAD_TEST_MODE),
+)
 
 if REDIS_URL:
     CACHES = {
@@ -181,7 +185,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -189,6 +194,9 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
     ],
@@ -196,16 +204,16 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 24,
 }
 
-if not LOAD_TEST_MODE:
-    REST_FRAMEWORK.update(
-        {
-            'DEFAULT_THROTTLE_CLASSES': [
-                'rest_framework.throttling.AnonRateThrottle',
-                'rest_framework.throttling.UserRateThrottle',
-            ],
-            'DEFAULT_THROTTLE_RATES': {
-                'anon': '60/minute',
-                'user': '300/minute',
-            },
-        }
-    )
+# if ENABLE_RATE_LIMITING:
+#     REST_FRAMEWORK.update(
+#         {
+#             'DEFAULT_THROTTLE_CLASSES': [
+#                 'rest_framework.throttling.AnonRateThrottle',
+#                 'rest_framework.throttling.UserRateThrottle',
+#             ],
+#             'DEFAULT_THROTTLE_RATES': {
+#                 'anon': '60/minute',
+#                 'user': '300/minute',
+#             },
+#         }
+#     )

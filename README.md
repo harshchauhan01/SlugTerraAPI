@@ -212,6 +212,7 @@ kubectl apply -f k8s/hpa.yml
 ### 2. Verify resources
 
 ```bash
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
 kubectl get ns
 kubectl get deploy,svc,ingress,hpa -n slugapi-ns
 kubectl get pods -n slugapi-ns -w

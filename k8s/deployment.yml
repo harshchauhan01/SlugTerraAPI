@@ -17,10 +17,25 @@ spec:
       - name: slugapp
         image: harshchauhan01/slug-api:latest
         imagePullPolicy: IfNotPresent
+        command: ["gunicorn"]
+        args:
+        - "config.wsgi:application"
+        - "--bind"
+        - "0.0.0.0:8000"
+        - "--workers"
+        - "3"
+        - "--timeout"
+        - "60"
+        - "--access-logfile"
+        - "-"
+        - "--error-logfile"
+        - "-"
         ports:
         - containerPort: 8000
         env:
         - name: DJANGO_DEBUG
+          value: "False"
+        - name: ENABLE_RATE_LIMITING
           value: "False"
         - name: DJANGO_ALLOWED_HOSTS
           value: "slugapp,slugapp.slugapi-ns,slugapp.slugapi-ns.svc,slugapp.slugapi-ns.svc.cluster.local,localhost,127.0.0.1,[::1]"
