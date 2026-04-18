@@ -33,11 +33,20 @@ spec:
         - containerPort: 5432
         env:
         - name: POSTGRES_DB
-          value: "django"
+          valueFrom:
+            configMapKeyRef:
+              name: slugapp-config
+              key: POSTGRES_DB
         - name: POSTGRES_USER
-          value: "postgres"
+          valueFrom:
+            configMapKeyRef:
+              name: slugapp-config
+              key: POSTGRES_USER
         - name: POSTGRES_PASSWORD
-          value: "postgres"
+          valueFrom:
+            secretKeyRef:
+              name: slugapp-secret
+              key: POSTGRES_PASSWORD
         volumeMounts:
         - name: postgres-data
           mountPath: /var/lib/postgresql/data

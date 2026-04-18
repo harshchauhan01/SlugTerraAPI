@@ -147,6 +147,22 @@ docker build -f config/docker/Dockerfile -t slugterra-api:dev config
 
 From `config/` folder:
 
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+macOS/Linux:
+
+```bash
+cp .env.example .env
+```
+
+Update values in `.env` if needed, especially `DJANGO_SECRET_KEY` and `POSTGRES_PASSWORD`.
+
+Then run:
+
 ```bash
 docker compose up --build
 ```
@@ -201,6 +217,8 @@ From `config/` folder:
 
 ```bash
 kubectl apply -f k8s/namespace.yml
+kubectl apply -f k8s/configmap.yml
+kubectl apply -f k8s/secret.yml
 kubectl apply -f k8s/postgres.yml
 kubectl apply -f k8s/redis.yml
 kubectl apply -f k8s/deployment.yml
@@ -247,12 +265,16 @@ kubectl delete -f k8s/hpa.yml
 kubectl delete -f k8s/ingress.yml
 kubectl delete -f k8s/service.yml
 kubectl delete -f k8s/deployment.yml
+kubectl delete -f k8s/secret.yml
+kubectl delete -f k8s/configmap.yml
 kubectl delete -f k8s/namespace.yml
 ```
 
 ### Notes
 
 - Current deployment image in `k8s/deployment.yml` is `harshchauhan01/slug-api:latest`.
+- Runtime values are now supplied through `k8s/configmap.yml` and `k8s/secret.yml`.
+- Update `k8s/secret.yml` values before applying in shared environments.
 - If you build your own image, push it to a registry and update the `image` field before applying.
 - A local kind cluster config exists at `kind-cluster/kind-config.yml`.
 - The app deployment expects the PostgreSQL service name `db` and Redis service name `redis`.

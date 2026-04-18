@@ -34,23 +34,55 @@ spec:
         - containerPort: 8000
         env:
         - name: DJANGO_DEBUG
-          value: "False"
+          valueFrom:
+            configMapKeyRef:
+              name: slugapp-config
+              key: DJANGO_DEBUG
         - name: ENABLE_RATE_LIMITING
-          value: "False"
+          valueFrom:
+            configMapKeyRef:
+              name: slugapp-config
+              key: ENABLE_RATE_LIMITING
         - name: DJANGO_ALLOWED_HOSTS
-          value: "slugapp,slugapp.slugapi-ns,slugapp.slugapi-ns.svc,slugapp.slugapi-ns.svc.cluster.local,localhost,127.0.0.1,[::1]"
+          valueFrom:
+            configMapKeyRef:
+              name: slugapp-config
+              key: DJANGO_ALLOWED_HOSTS
+        - name: DJANGO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: slugapp-secret
+              key: DJANGO_SECRET_KEY
         - name: POSTGRES_DB
-          value: "django"
+          valueFrom:
+            configMapKeyRef:
+              name: slugapp-config
+              key: POSTGRES_DB
         - name: POSTGRES_USER
-          value: "postgres"
+          valueFrom:
+            configMapKeyRef:
+              name: slugapp-config
+              key: POSTGRES_USER
         - name: POSTGRES_PASSWORD
-          value: "postgres"
+          valueFrom:
+            secretKeyRef:
+              name: slugapp-secret
+              key: POSTGRES_PASSWORD
         - name: POSTGRES_HOST
-          value: "db"
+          valueFrom:
+            configMapKeyRef:
+              name: slugapp-config
+              key: POSTGRES_HOST
         - name: POSTGRES_PORT
-          value: "5432"
+          valueFrom:
+            configMapKeyRef:
+              name: slugapp-config
+              key: POSTGRES_PORT
         - name: REDIS_URL
-          value: "redis://redis:6379/1"
+          valueFrom:
+            configMapKeyRef:
+              name: slugapp-config
+              key: REDIS_URL
         resources:
           requests:
             cpu: "100m"

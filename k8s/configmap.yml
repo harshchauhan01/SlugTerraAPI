@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: slugapp-config
+  namespace: slugapi-ns
+data:
+  DJANGO_DEBUG: "False"
+  ENABLE_RATE_LIMITING: "False"
+  DJANGO_ALLOWED_HOSTS: "slugapp,slugapp.slugapi-ns,slugapp.slugapi-ns.svc,slugapp.slugapi-ns.svc.cluster.local,localhost,127.0.0.1,[::1]"
+  POSTGRES_HOST: "db"
+  POSTGRES_PORT: "5432"
+  REDIS_URL: "redis://redis:6379/1"
+  POSTGRES_DB: "django"
+  POSTGRES_USER: "postgres"
