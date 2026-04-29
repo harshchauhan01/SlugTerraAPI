@@ -3,10 +3,13 @@ kind: Service
 metadata:
   name: slugapp
   namespace: slugapi-ns
+  labels:
+    app: slugapp
 spec:
   type: ClusterIP
   selector:
     app: slugapp
   ports:
-  - port: 80
+  - name: http
+    port: 80
     targetPort: 8000

@@ -14,12 +14,15 @@ This project serves slug information from a JSON dataset and exposes it through 
 6. Quick Start (Local)
 7. Running with Docker
 8. Running on Kubernetes
-9. API Documentation UI
-10. API Endpoints
-11. Load Testing with Locust
-12. Data Source and Image Assets
-13. Troubleshooting
-14. Notes for Production
+9. CI/CD Pipeline (Jenkins)
+10. Infrastructure as Code (Terraform)
+11. Monitoring and Alerting
+12. API Documentation UI
+13. API Endpoints
+14. Load Testing with Locust
+15. Data Source and Image Assets
+16. Troubleshooting
+17. Notes for Production
 
 ## Project Overview
 
@@ -96,7 +99,6 @@ SlugTerraAPI/
 Windows PowerShell:
 
 ```powershell
-cd config
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
@@ -104,7 +106,6 @@ python -m venv .venv
 macOS/Linux:
 
 ```bash
-cd config
 python3 -m venv .venv
 source .venv/bin/activate
 ```
@@ -137,15 +138,15 @@ Use Docker Compose for local containerized development (includes PostgreSQL + Re
 
 ### 1. Build image (optional)
 
-From repository root:
+From the `config/` folder:
 
 ```bash
-docker build -f config/docker/Dockerfile -t slugterra-api:dev config
+docker build -f docker/Dockerfile -t slugterra-api:dev .
 ```
 
 ### 2. Start with Docker Compose
 
-From `config/` folder:
+From the `config/` folder:
 
 Windows PowerShell:
 
@@ -258,6 +259,41 @@ Then open:
 
 - http://127.0.0.1:8000/
 
+## Unified Deploy Command (kind or EKS)
+
+Use one script and switch the target.
+
+From `config/` folder:
+
+### Deploy to local kind (no Terraform)
+
+```bash
+bash scripts/deploy.sh kind
+```
+
+This path creates/uses the kind cluster, builds a local app image, loads it into kind, and applies all Kubernetes manifests.
+
+### Deploy to EKS (Terraform-driven)
+
+```bash
+export AWS_REGION=ap-south-1
+export TERRAFORM_AUTO_APPLY=true
+export IMAGE_URI=docker.io/<your-user>/slug-api:<tag>
+bash scripts/deploy.sh eks
+```
+
+This path runs Terraform init/validate/plan (+apply when enabled), then deploys manifests to Kubernetes.
+
+Environment switches supported by the same script:
+
+- `TARGET`: `kind` or `eks` (or pass as first argument)
+- `TERRAFORM_AUTO_APPLY`: `true|false` (used for `eks` target)
+- `IMAGE_URI`: image override for `eks`
+- `LOCAL_IMAGE_NAME`: image name for `kind` (default `slugterra-api:local`)
+- `BUILD_LOCAL_IMAGE`: `true|false` for `kind`
+- `KIND_CLUSTER_NAME`: kind cluster name (default `slugterra`)
+- `SKIP_MONITORING`: `true|false`
+
 ### 4. Clean up
 
 ```bash
@@ -281,28 +317,82 @@ kubectl delete -f k8s/namespace.yml
 - The ingress rule does not use a host because Kubernetes ingress hosts must be DNS names, not IP addresses.
 - To keep access on `127.0.0.1` only, port-forward the ingress controller to `127.0.0.1:80`.
 
-## Monitoring with Prometheus and Grafana
+## CI/CD Pipeline (Jenkins)
 
-You can run Prometheus and Grafana as standalone containers alongside the app.
+The pipeline is defined in `config/Jenkinsfile` and follows these stages:
 
-From `config/` folder:
+- Checkout from git
+- Install dependencies
+- Parallel quality gates:
+  - flake8 linting
+  - bandit static security scan
+  - Django unit tests
+- Multi-stage Docker build
+- Push image to registry
+- Terraform init/validate/plan (+ optional apply)
+- Kubernetes deployment with rolling update and rollout verification
+
+Expected Jenkins credentials:
+
+- `dockerhub-credentials` (registry auth)
+- `kubeconfig-file` (kubeconfig as secret file)
+
+## Infrastructure as Code (Terraform)
+
+Terraform files are in `config/terraform/` and provision the core infrastructure layers:
+
+- VPC + public/private subnets
+- EKS cluster
+- RDS PostgreSQL instance
+- ECR repository
+- S3 bucket + DynamoDB lock table for remote state
+
+Quick usage:
 
 ```bash
-docker run -d --name prometheus --restart unless-stopped -p 9090:9090 prom/prometheus:latest
-docker run -d --name grafana --restart unless-stopped -p 3000:3000 -e GF_SECURITY_ADMIN_USER=admin -e GF_SECURITY_ADMIN_PASSWORD=admin grafana/grafana:latest
+cd terraform
+cp backend.tf.example backend.tf
+cp terraform.tfvars.example terraform.tfvars
+terraform init
+terraform validate
+terraform plan
 ```
 
-Open the UIs:
+## Monitoring and Alerting
 
-- Prometheus: http://127.0.0.1:9090/
-- Grafana: http://127.0.0.1:3000/
+The Django app exposes `/metrics` via `django-prometheus`.
 
-Default Grafana login:
+Monitoring manifests are in `k8s/monitoring/` and include:
+
+- Prometheus config, deployment, and service
+- Alert rules config (`prometheus-alerts-configmap.yml`)
+- Grafana deployment, datasource, and dashboard provisioning
+- Operator-only `ServiceMonitor` and `PrometheusRule` resources are in `k8s/monitoring-operator/` and require kube-prometheus-stack CRDs
+
+Apply monitoring stack:
+
+```bash
+kubectl apply -f k8s/monitoring/namespace.yml
+kubectl apply -f k8s/monitoring/
+```
+
+If you have kube-prometheus-stack CRDs installed, apply the operator manifests separately:
+
+```bash
+kubectl apply -f k8s/monitoring-operator/
+```
+
+Access dashboards locally:
+
+```bash
+kubectl port-forward -n monitoring service/prometheus 9090:9090
+kubectl port-forward -n monitoring service/grafana 3000:3000
+```
+
+Grafana default login:
 
 - Username: admin
 - Password: admin
-
-If you want Prometheus to scrape this API, add a scrape configuration that targets the app's metrics endpoint.
 
 ## API Documentation UI
 
@@ -488,6 +578,11 @@ Current defaults are development-oriented. Before production deployment:
 - Use a production database and robust cache strategy if needed
 - Serve static files properly
 - Run with gunicorn/uvicorn behind a reverse proxy
+
+## Architecture and Runbooks
+
+- Architecture decisions and DFDs: `docs/devops-architecture.md`
+- Operational runbook: `docs/runbook.md`
 
 ## License
 

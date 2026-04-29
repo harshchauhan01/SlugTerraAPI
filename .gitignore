@@ -6,3 +6,14 @@
 # Python cache
 __pycache__/
 *.py[cod]
+
+# Local virtual envs
+.venv/
+venv/
+
+# Terraform state
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+backend.tf

@@ -274,6 +274,11 @@ def home(request):
 
 
 @api_view(["GET"])
+def healthz(request):
+    return Response({"status": "ok"})
+
+
+@api_view(["GET"])
 def slugs_list(request):
     """Return slugs with optional filtering and pagination."""
     dataset = _load_slugs_data()

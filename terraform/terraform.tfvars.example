@@ -1,0 +1,4 @@
+project_name      = "slugterra"
+environment       = "dev"
+aws_region        = "ap-south-1"
+postgres_password = "change-me"

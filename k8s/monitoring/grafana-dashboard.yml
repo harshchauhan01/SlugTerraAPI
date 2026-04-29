@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  api-overview.json: |
+    {
+      "annotations": {"list": []},
+      "editable": true,
+      "graphTooltip": 0,
+      "panels": [
+        {
+          "title": "Requests per second",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "sum(rate(django_http_responses_total_by_status_total[1m]))",
+              "legendFormat": "rps"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+        },
+        {
+          "title": "5xx error rate",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "sum(rate(django_http_responses_total_by_status_total{status=~\"5..\"}[1m]))",
+              "legendFormat": "5xx"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+        }
+      ],
+      "refresh": "10s",
+      "schemaVersion": 38,
+      "style": "dark",
+      "title": "SlugTerra API Overview",
+      "timezone": "browser",
+      "version": 1
+    }

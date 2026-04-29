@@ -17,11 +17,45 @@ import os
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _load_env_file(env_path):
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+
+        if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+            value = value[1:-1]
+
+        os.environ.setdefault(key, value)
+
+
+_load_env_file(BASE_DIR / ".env")
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv(
+
+
+def _env_str(name, default=""):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    value = value.strip()
+    return value if value else default
+
+
+SECRET_KEY = _env_str(
     "DJANGO_SECRET_KEY",
     "django-insecure-dev-only-change-me",
 )
@@ -35,6 +69,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'django_prometheus',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -48,6 +83,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -55,6 +91,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -101,14 +138,15 @@ def _env_list(name, default):
     return values or default
 
 DEBUG = _env_bool("DJANGO_DEBUG", True)
+USE_POSTGRES_DB = _env_bool("USE_POSTGRES_DB", False)
 
 ALLOWED_HOSTS = _env_list(
     "DJANGO_ALLOWED_HOSTS",
     ["localhost", "127.0.0.1", "[::1]"],
 )
 
-postgres_host = os.getenv("POSTGRES_HOST")
-if postgres_host:
+postgres_host = _env_str("POSTGRES_HOST")
+if USE_POSTGRES_DB and postgres_host:
     DATABASES = {
         'default': {
             "ENGINE": "django.db.backends.postgresql",
@@ -128,13 +166,14 @@ else:
     }
 
 REDIS_URL = os.getenv("REDIS_URL")
+USE_REDIS_CACHE = _env_bool("USE_REDIS_CACHE", False)
 LOAD_TEST_MODE = _env_bool("LOAD_TEST_MODE", False)
 ENABLE_RATE_LIMITING = _env_bool(
     "ENABLE_RATE_LIMITING",
     (not DEBUG and not LOAD_TEST_MODE),
 )
 
-if REDIS_URL:
+if USE_REDIS_CACHE and REDIS_URL:
     CACHES = {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
@@ -189,6 +228,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [BASE_DIR / 'static']
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

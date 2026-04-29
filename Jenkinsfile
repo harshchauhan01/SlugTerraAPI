@@ -1,54 +1,129 @@
-pipeline{
+pipeline {
     agent any
 
-    environment {
-        REGISTRY = "harshchauhan01"
-        IMAGE_NAME = "slug-api:latest"
-        KUBE_NAMESPACE = "slugapi-ns"
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        ansiColor('xterm')
     }
-    stages{
-        stage("Checkout"){
-            steps{
-                git branch: 'main', url: 'https://github.com/harshchauhan01/SlugTerraAPI.git'
-            }
-        }
 
-        stage("Install Dependencies"){
-            steps{
-                sh '''
-                python -m venv venv
-                . venv/bin/activate
-                pip install -r requirements.txt
-                '''
-            }
-        }
+    environment {
+        REGISTRY = 'docker.io'
+        IMAGE_REPO = 'harshchauhan01/slug-api'
+        KUBE_NAMESPACE = 'slugapi-ns'
+        DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
+        KUBECONFIG_CREDENTIALS_ID = 'kubeconfig-file'
+        TERRAFORM_AUTO_APPLY = 'false'
+    }
 
-        stages("Build Docker Image"){
-            steps{
-                script{
-                    docker.build("${REGISTRY}/${IMAGE_NAME}")
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_SHORT_SHA = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    env.IMAGE_TAG = "${env.GIT_SHORT_SHA}-${env.BUILD_NUMBER}"
+                    env.IMAGE_URI = "${env.REGISTRY}/${env.IMAGE_REPO}:${env.IMAGE_TAG}"
                 }
             }
         }
 
-        stages("Push Docker Image"){
-            steps{
-                script{
-                    docker.withRegistry('',DOCKER_CREDENTIALS_ID){
-                        docker.image("${REGISTRY}/${IMAGE_NAME}").push()
+        stage('Install Dependencies') {
+            steps {
+                sh '''
+                    python3 -m venv .venv
+                    . .venv/bin/activate
+                    python -m pip install --upgrade pip
+                    pip install -r requirements/dev.txt
+                '''
+            }
+        }
+
+        stage('Quality Gates') {
+            parallel {
+                stage('Lint + Static Analysis') {
+                    steps {
+                        sh '''
+                            . .venv/bin/activate
+                            flake8 .
+                            bandit -q -r config slugs
+                        '''
+                    }
+                }
+
+                stage('Unit Tests') {
+                    steps {
+                        sh '''
+                            . .venv/bin/activate
+                            python manage.py test
+                        '''
                     }
                 }
             }
         }
 
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -f docker/Dockerfile --target production -t ${IMAGE_URI} .'
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', DOCKER_CREDENTIALS_ID) {
+                        sh 'docker push ${IMAGE_URI}'
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                dir('terraform') {
+                    sh '''
+                        terraform init -input=false
+                        terraform validate
+                        terraform plan -input=false -out=tfplan
+                    '''
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            when {
+                expression { return env.TERRAFORM_AUTO_APPLY == 'true' }
+            }
+            steps {
+                dir('terraform') {
+                    sh 'terraform apply -input=false -auto-approve tfplan'
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                withCredentials([file(credentialsId: KUBECONFIG_CREDENTIALS_ID, variable: 'KCFG')]) {
+                    sh '''
+                        export KUBECONFIG="$KCFG"
+                        export TERRAFORM_AUTO_APPLY="${TERRAFORM_AUTO_APPLY}"
+                        export IMAGE_URI="${IMAGE_URI}"
+                        bash scripts/deploy.sh eks
+                    '''
+                }
+            }
+        }
     }
 
-    post{
-        success{
-            echo "Task Done"
+    post {
+        success {
+            echo "Pipeline succeeded. Deployed ${env.IMAGE_URI}"
         }
-        failure{
-            echo "Pipeline failed"
+        failure {
+            echo 'Pipeline failed. Review stage logs for root cause.'
+        }
+        always {
+            cleanWs(deleteDirs: true)
         }
     }
 }

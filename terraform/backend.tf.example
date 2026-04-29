@@ -1,0 +1,10 @@
+# Copy this file to backend.tf and update values before running terraform init.
+terraform {
+  backend "s3" {
+    bucket         = "slugterra-dev-tf-state"
+    key            = "slugterra/terraform.tfstate"
+    region         = "ap-south-1"
+    dynamodb_table = "slugterra-dev-tf-locks"
+    encrypt        = true
+  }
+}
