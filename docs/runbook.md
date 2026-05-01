@@ -65,6 +65,16 @@ kubectl port-forward -n monitoring service/grafana 3000:3000
 - Prometheus UI: http://127.0.0.1:9090
 - Grafana UI: http://127.0.0.1:3000
 
+The monitoring stack also deploys Postgres, Redis, Node Exporter, and kube-state-metrics exporters, so community dashboards for those systems should start showing data after Prometheus refreshes.
+
+If a dashboard still shows `N/A`, verify the matching Prometheus target is `UP` before changing the dashboard JSON.
+
+Grafana does not need an automatic restart on every monitoring apply. If you change provisioning files such as datasources or dashboard providers, restart it once manually:
+
+```bash
+kubectl -n monitoring rollout restart deployment/grafana
+```
+
 ## 7. Terraform Workflow
 ```bash
 cd terraform

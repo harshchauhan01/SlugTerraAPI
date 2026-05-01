@@ -30,6 +30,8 @@ spec:
             mountPath: /etc/grafana/provisioning/datasources
           - name: dashboards-provider
             mountPath: /etc/grafana/provisioning/dashboards
+          - name: grafana-storage
+            mountPath: /var/lib/grafana
           - name: dashboards
             mountPath: /var/lib/grafana/dashboards
         resources:
@@ -49,3 +51,6 @@ spec:
       - name: dashboards
         configMap:
           name: grafana-dashboards
+      - name: grafana-storage
+        persistentVolumeClaim:
+          claimName: grafana-pvc

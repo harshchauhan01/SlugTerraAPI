@@ -365,6 +365,8 @@ The Django app exposes `/metrics` via `django-prometheus`.
 Monitoring manifests are in `k8s/monitoring/` and include:
 
 - Prometheus config, deployment, and service
+- Postgres and Redis exporters for database/cache dashboards
+- Node Exporter and kube-state-metrics for host and cluster dashboards
 - Alert rules config (`prometheus-alerts-configmap.yml`)
 - Grafana deployment, datasource, and dashboard provisioning
 - Operator-only `ServiceMonitor` and `PrometheusRule` resources are in `k8s/monitoring-operator/` and require kube-prometheus-stack CRDs
@@ -375,6 +377,8 @@ Apply monitoring stack:
 kubectl apply -f k8s/monitoring/namespace.yml
 kubectl apply -f k8s/monitoring/
 ```
+
+If you update only monitoring components later, the same command is enough because the directory includes Prometheus, Grafana, exporters, and dashboard config maps.
 
 If you have kube-prometheus-stack CRDs installed, apply the operator manifests separately:
 
