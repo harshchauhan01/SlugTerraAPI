@@ -61,13 +61,17 @@ kubectl get hpa -n slugapi-ns
 ```bash
 kubectl port-forward -n monitoring service/prometheus 9090:9090
 kubectl port-forward -n monitoring service/grafana 3000:3000
+kubectl port-forward -n monitoring service/loki 3100:3100
 ```
 - Prometheus UI: http://127.0.0.1:9090
 - Grafana UI: http://127.0.0.1:3000
+- Loki UI/API: http://127.0.0.1:3100
 
-The monitoring stack also deploys Postgres, Redis, Node Exporter, and kube-state-metrics exporters, so community dashboards for those systems should start showing data after Prometheus refreshes.
+The monitoring stack also deploys Postgres, Redis, Node Exporter, kube-state-metrics exporters, and cluster-wide log shipping through Promtail, so community dashboards and log queries should start showing data after Prometheus and Loki refresh.
 
 If a dashboard still shows `N/A`, verify the matching Prometheus target is `UP` before changing the dashboard JSON.
+
+In Grafana, open Explore and select the Loki datasource to query pod logs with labels such as `namespace`, `pod`, `container`, `app`, and `node`.
 
 Grafana does not need an automatic restart on every monitoring apply. If you change provisioning files such as datasources or dashboard providers, restart it once manually:
 

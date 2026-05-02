@@ -8,7 +8,7 @@ The baseline Django API is functionally complete but operationally weak without 
 - CI/CD: declarative pipeline in `Jenkinsfile`
 - Orchestration: Kubernetes manifests in `k8s/`
 - IaC: Terraform stack in `terraform/`
-- Monitoring: Prometheus + Grafana manifests in `k8s/monitoring/`
+- Monitoring: Prometheus + Grafana + Loki + Promtail manifests in `k8s/monitoring/`
 
 ## DFD Level 0 (Context)
 ```mermaid
@@ -17,7 +17,7 @@ flowchart LR
     Ops[Operations Team] -->|config + approvals| Pipeline
     Pipeline -->|deploy artifacts| K8s[Kubernetes Cluster]
     Pipeline -->|metrics and alerts| MonUsers[Monitoring Users]
-    K8s -->|runtime metrics| Pipeline
+    K8s -->|runtime metrics and pod logs| Pipeline
 ```
 
 ## DFD Level 1 (Expanded)
@@ -30,8 +30,8 @@ flowchart LR
     D1 --> P5[P5 Orchestration Kubernetes]
     P4 --> P5
     P5 --> K8s[Kubernetes Cluster]
-    K8s --> P6[P6 Monitoring Prometheus]
-    P6 --> D3[(D3 Time-Series Store)]
+    K8s --> P6[P6 Monitoring Prometheus and Loki]
+    P6 --> D3[(D3 Time-Series and Log Store)]
     D3 --> P7[P7 Dashboard and Alerting Grafana and Alerting Rules]
     P7 --> Ops
 ```
@@ -52,7 +52,7 @@ flowchart TD
     I --> J{Readiness Healthy?}
     J -- No --> X
     J -- Yes --> K[Prometheus Scrape]
-    K --> L[Grafana Dashboard and Alerts]
+    K --> L[Grafana Dashboard, Alerts, and Log Explore]
     L --> M([End: Deployment Live])
 ```
 
@@ -68,3 +68,4 @@ flowchart TD
 - App metrics endpoint: `/metrics`.
 - Baseline alerts include high P95 latency and high 5xx ratio.
 - Grafana dashboard provisions API request rate and error trends.
+- Loki stores cluster pod logs, and Promtail ships logs from every node.

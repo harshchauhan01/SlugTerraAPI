@@ -15,14 +15,14 @@ This project serves slug information from a JSON dataset and exposes it through 
 7. Running with Docker
 8. Running on Kubernetes
 9. CI/CD Pipeline (Jenkins)
-10. Infrastructure as Code (Terraform)
-11. Monitoring and Alerting
-12. API Documentation UI
-13. API Endpoints
-14. Load Testing with Locust
-15. Data Source and Image Assets
-16. Troubleshooting
-17. Notes for Production
+10. Monitoring and Alerting
+11. API Documentation UI
+12. API Endpoints
+13. Load Testing with Locust
+14. Data Source and Image Assets
+15. Troubleshooting
+16. Notes for Production
+17. AWS Deployment
 
 ## Project Overview
 
@@ -226,6 +226,7 @@ kubectl apply -f k8s/deployment.yml
 kubectl apply -f k8s/service.yml
 kubectl apply -f k8s/ingress.yml
 kubectl apply -f k8s/hpa.yml
+kubectl apply -f k8s/monitoring/
 ```
 
 ### 2. Verify resources
@@ -259,13 +260,23 @@ Then open:
 
 - http://127.0.0.1:8000/
 
-## Unified Deploy Command (kind or EKS)
+### 4. Monitor logs
 
-Use one script and switch the target.
+Use Loki through Grafana Explore for pod log search across the cluster. The monitoring stack ships Promtail as a DaemonSet, so all node-local container logs are collected automatically.
+
+Port-forward Loki if you want to verify ingestion directly:
+
+```bash
+kubectl port-forward -n monitoring service/loki 3100:3100
+```
+
+Then query logs in Grafana with labels like `namespace="slugapi-ns"`.
+
+## Unified Deploy Command (kind)
+
+Use the deploy script for local Kubernetes deployments using kind.
 
 From `config/` folder:
-
-### Deploy to local kind (no Terraform)
 
 ```bash
 bash scripts/deploy.sh kind
@@ -273,28 +284,15 @@ bash scripts/deploy.sh kind
 
 This path creates/uses the kind cluster, builds a local app image, loads it into kind, and applies all Kubernetes manifests.
 
-### Deploy to EKS (Terraform-driven)
+Environment variables supported by the script:
 
-```bash
-export AWS_REGION=ap-south-1
-export TERRAFORM_AUTO_APPLY=true
-export IMAGE_URI=docker.io/<your-user>/slug-api:<tag>
-bash scripts/deploy.sh eks
-```
-
-This path runs Terraform init/validate/plan (+apply when enabled), then deploys manifests to Kubernetes.
-
-Environment switches supported by the same script:
-
-- `TARGET`: `kind` or `eks` (or pass as first argument)
-- `TERRAFORM_AUTO_APPLY`: `true|false` (used for `eks` target)
-- `IMAGE_URI`: image override for `eks`
+- `TARGET`: `kind` (default)
 - `LOCAL_IMAGE_NAME`: image name for `kind` (default `slugterra-api:local`)
 - `BUILD_LOCAL_IMAGE`: `true|false` for `kind`
 - `KIND_CLUSTER_NAME`: kind cluster name (default `slugterra`)
 - `SKIP_MONITORING`: `true|false`
 
-### 4. Clean up
+### Clean up
 
 ```bash
 kubectl delete -f k8s/hpa.yml
@@ -337,26 +335,22 @@ Expected Jenkins credentials:
 - `dockerhub-credentials` (registry auth)
 - `kubeconfig-file` (kubeconfig as secret file)
 
-## Infrastructure as Code (Terraform)
+## Infrastructure as Code and AWS Deployment
 
-Terraform files are in `config/terraform/` and provision the core infrastructure layers:
+For detailed step-by-step instructions on deploying SlugTerraAPI to AWS using Terraform, ECR, and EKS, please refer to:
 
-- VPC + public/private subnets
-- EKS cluster
-- RDS PostgreSQL instance
-- ECR repository
-- S3 bucket + DynamoDB lock table for remote state
+**[AWS Deployment Guide](docs/aws.md)**
 
-Quick usage:
-
-```bash
-cd terraform
-cp backend.tf.example backend.tf
-cp terraform.tfvars.example terraform.tfvars
-terraform init
-terraform validate
-terraform plan
-```
+The AWS deployment guide covers:
+- AWS prerequisites and credential setup
+- Infrastructure provisioning with Terraform
+- Building and pushing Docker images to ECR
+- Deploying to EKS
+- Configuring Kubernetes resources
+- Monitoring and alerting setup
+- Scaling and auto-recovery
+- Cleanup and teardown procedures
+- Troubleshooting common issues
 
 ## Monitoring and Alerting
 
