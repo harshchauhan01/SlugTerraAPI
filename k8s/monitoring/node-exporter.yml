@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-exporter
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: node-exporter
+  template:
+    metadata:
+      labels:
+        app: node-exporter
+    spec:
+      hostPID: true
+      hostNetwork: true
+      tolerations:
+      - operator: Exists
+      containers:
+      - name: node-exporter
+        image: prom/node-exporter:v1.8.2
+        args:
+        - --path.rootfs=/host
+        - --web.listen-address=:9100
+        ports:
+        - name: metrics
+          containerPort: 9100
+          hostPort: 9100
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: rootfs
+          mountPath: /host
+          readOnly: true
+        - name: proc
+          mountPath: /host/proc
+          readOnly: true
+        - name: sys
+          mountPath: /host/sys
+          readOnly: true
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: 9100
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: 9100
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 6
+      volumes:
+      - name: rootfs
+        hostPath:
+          path: /
+      - name: proc
+        hostPath:
+          path: /proc
+      - name: sys
+        hostPath:
+          path: /sys
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-exporter
+  namespace: monitoring
+spec:
+  selector:
+    app: node-exporter
+  ports:
+  - name: metrics
+    port: 9100
+    targetPort: 9100
