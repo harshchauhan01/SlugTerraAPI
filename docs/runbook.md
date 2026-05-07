@@ -14,7 +14,7 @@ curl http://127.0.0.1:8000/metrics
 
 ## 3. CI/CD Pipeline Trigger
 - Push a commit to the branch configured in Jenkins.
-- Jenkins executes lint, bandit, tests, image build/push, terraform plan/apply, and Kubernetes deploy.
+- Jenkins executes lint, bandit, tests, image build/push, terraform plan/apply, and deployment (kind/EC2).
 
 ## 4. Unified Kubernetes Deployment
 
@@ -26,14 +26,7 @@ Local kind:
 bash scripts/deploy.sh kind
 ```
 
-EKS with Terraform apply:
-
-```bash
-export AWS_REGION=ap-south-1
-export TERRAFORM_AUTO_APPLY=true
-export IMAGE_URI=docker.io/<your-user>/slug-api:<tag>
-bash scripts/deploy.sh eks
-```
+For AWS-based deployment please follow `config/docs/aws.md` which describes the EC2 + Docker (free-tier) workflow.
 
 Manual fallback (if script is not used):
 

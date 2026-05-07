@@ -1,7 +1,7 @@
 variable "project_name" {
   type        = string
   description = "Project prefix used in resource names"
-  default     = "slugterra"
+  default     = "slugapi"
 }
 
 variable "environment" {
@@ -13,7 +13,7 @@ variable "environment" {
 variable "aws_region" {
   type        = string
   description = "AWS region"
-  default     = "ap-south-1"
+  default     = "us-east-1"
 }
 
 variable "vpc_cidr" {
@@ -24,18 +24,12 @@ variable "vpc_cidr" {
 
 variable "public_subnets" {
   type        = list(string)
-  description = "Public subnet CIDR blocks"
+  description = "Public subnet CIDR blocks (free tier only uses public subnets)"
   default     = ["10.20.1.0/24", "10.20.2.0/24"]
-}
-
-variable "private_subnets" {
-  type        = list(string)
-  description = "Private subnet CIDR blocks"
-  default     = ["10.20.11.0/24", "10.20.12.0/24"]
 }
 
 variable "postgres_password" {
   type        = string
-  description = "Password for RDS PostgreSQL"
+  description = "Password for RDS PostgreSQL (use strong password)"
   sensitive   = true
 }

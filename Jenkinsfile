@@ -101,16 +101,13 @@ pipeline {
             }
         }
 
-        stage('Deploy to Kubernetes') {
+        stage('Deploy (kind)') {
             steps {
-                withCredentials([file(credentialsId: KUBECONFIG_CREDENTIALS_ID, variable: 'KCFG')]) {
-                    sh '''
-                        export KUBECONFIG="$KCFG"
-                        export TERRAFORM_AUTO_APPLY="${TERRAFORM_AUTO_APPLY}"
-                        export IMAGE_URI="${IMAGE_URI}"
-                        bash scripts/deploy.sh eks
-                    '''
-                }
+                sh '''
+                    export TERRAFORM_AUTO_APPLY="${TERRAFORM_AUTO_APPLY}"
+                    export IMAGE_URI="${IMAGE_URI}"
+                    bash scripts/deploy.sh kind
+                '''
             }
         }
     }

@@ -328,12 +328,11 @@ The pipeline is defined in `config/Jenkinsfile` and follows these stages:
 - Multi-stage Docker build
 - Push image to registry
 - Terraform init/validate/plan (+ optional apply)
-- Kubernetes deployment with rolling update and rollout verification
+- Deploy (kind for local testing or EC2 via Terraform for AWS)
 
 Expected Jenkins credentials:
 
 - `dockerhub-credentials` (registry auth)
-- `kubeconfig-file` (kubeconfig as secret file)
 
 ## Infrastructure as Code and AWS Deployment
 

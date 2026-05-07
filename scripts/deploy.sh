@@ -72,46 +72,14 @@ run_kind() {
   echo "Access app: http://127.0.0.1/"
 }
 
-run_eks() {
-  require_cmd terraform
-  require_cmd kubectl
-
-  pushd terraform >/dev/null
-  terraform init -input=false
-  terraform validate
-  terraform plan -input=false -out=tfplan
-
-  if [[ "${TERRAFORM_AUTO_APPLY}" == "true" ]]; then
-    terraform apply -input=false -auto-approve tfplan
-
-    if command -v aws >/dev/null 2>&1; then
-      cluster_name="$(terraform output -raw eks_cluster_name 2>/dev/null || true)"
-      if [[ -n "${cluster_name}" && -n "${AWS_REGION:-}" ]]; then
-        aws eks update-kubeconfig --name "${cluster_name}" --region "${AWS_REGION}"
-      fi
-    fi
-  fi
-  popd >/dev/null
-
-  apply_manifests
-
-  if [[ -n "${IMAGE_URI}" ]]; then
-    kubectl -n slugapi-ns set image deployment/slugapp slugapp="${IMAGE_URI}"
-  fi
-
-  rollout_check
-  echo "EKS deployment completed."
-}
+# EKS deployment removed in free-tier conversion; use EC2 or kind instead.
 
 case "${TARGET}" in
   kind)
     run_kind
     ;;
-  eks)
-    run_eks
-    ;;
   *)
-    echo "Unsupported target '${TARGET}'. Use 'kind' or 'eks'." >&2
+    echo "Unsupported target '${TARGET}'. Use 'kind'." >&2
     exit 1
     ;;
 esac

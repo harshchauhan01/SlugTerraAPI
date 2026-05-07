@@ -45,6 +45,9 @@ data:
     server:
       http_listen_port: 9080
       grpc_listen_port: 0
+    
+    target_config:
+      sync_period: 10s
 
     positions:
       filename: /run/promtail/positions.yaml
@@ -56,26 +59,44 @@ data:
       - job_name: kubernetes-pods
         pipeline_stages:
           - cri: {}
+
         kubernetes_sd_configs:
           - role: pod
+            namespaces:
+              names:
+                - monitoring
+                - slugapi-ns
+
         relabel_configs:
           - source_labels: [__meta_kubernetes_pod_node_name]
             regex: ${HOSTNAME}
             action: keep
-          - source_labels: [__meta_kubernetes_namespace]
+
+          - action: replace
+            source_labels: [__meta_kubernetes_namespace]
             target_label: namespace
-          - source_labels: [__meta_kubernetes_pod_name]
+
+          - action: replace
+            source_labels: [__meta_kubernetes_pod_name]
             target_label: pod
-          - source_labels: [__meta_kubernetes_pod_container_name]
+
+          - action: replace
+            source_labels: [__meta_kubernetes_pod_container_name]
             target_label: container
-          - source_labels: [__meta_kubernetes_pod_label_app]
+
+          - action: replace
+            source_labels: [__meta_kubernetes_pod_label_app]
             target_label: app
-          - source_labels: [__meta_kubernetes_pod_node_name]
+
+          - action: replace
+            source_labels: [__meta_kubernetes_pod_node_name]
             target_label: node
-          - source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
+
+          - action: replace
+            source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
             separator: /
             target_label: __path__
-            replacement: /var/log/pods/*$1/*.log
+            replacement: /var/log/pods/*$$1/*.log
 
 ---
 apiVersion: apps/v1
@@ -97,10 +118,17 @@ spec:
         - operator: Exists
       containers:
       - name: promtail
-        image: grafana/promtail:3.4.2
-        args:
-          - -config.expand-env=true
-          - -config.file=/etc/promtail/promtail.yml
+        image: grafana/promtail:3.6.8
+        command:
+          - sh
+          - -c
+          - |
+            ulimit -n 65536
+            echo "nofile=$(ulimit -n)"
+            exec /usr/bin/promtail \
+              -config.expand-env=true \
+              -log.level=debug \
+              -config.file=/etc/promtail/promtail.yml
         env:
           - name: HOSTNAME
             valueFrom:
@@ -110,6 +138,7 @@ spec:
           - name: http
             containerPort: 9080
         securityContext:
+          privileged: true
           runAsUser: 0
         volumeMounts:
           - name: config
@@ -117,7 +146,7 @@ spec:
           - name: positions
             mountPath: /run/promtail
           - name: varlog
-            mountPath: /var/log
+            mountPath: /var/log/pods
             readOnly: true
         readinessProbe:
           httpGet:
@@ -150,4 +179,4 @@ spec:
         emptyDir: {}
       - name: varlog
         hostPath:
-          path: /var/log
+          path: /var/log/pods

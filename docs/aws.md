@@ -1,28 +1,29 @@
-# SlugTerraAPI - AWS Deployment Guide
+# SlugTerraAPI - AWS Free Tier Deployment Guide
 
-This guide provides detailed step-by-step instructions for deploying SlugTerraAPI on AWS using Terraform, ECR, and EKS.
+**⚠️ IMPORTANT**: This guide is optimized for AWS **Free Tier only**. It uses EC2 + Docker instead of EKS to minimize costs.
+
+- **12-month free tier**: After 12 months, resources will incur charges
+- **750 hours/month limit**: Equivalent to ~31 days of continuous running
+- **Recommended region**: `us-east-1` (best free tier coverage)
+- **Monthly cost after 12 months**: ~$69/month
 
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
 2. [AWS Credentials Setup](#aws-credentials-setup)
 3. [Infrastructure Provisioning with Terraform](#infrastructure-provisioning-with-terraform)
-4. [Build and Push Docker Image to ECR](#build-and-push-docker-image-to-ecr)
-5. [Deploy to EKS](#deploy-to-eks)
-6. [Configure Kubernetes Resources](#configure-kubernetes-resources)
-7. [Verify Deployment](#verify-deployment)
-8. [Access the Application](#access-the-application)
-9. [Monitoring and Alerting](#monitoring-and-alerting)
-10. [Scaling and Auto-Recovery](#scaling-and-auto-recovery)
-11. [Cost Optimization](#cost-optimization)
-12. [Cleanup and Teardown](#cleanup-and-teardown)
-13. [Troubleshooting](#troubleshooting)
+4. [Verify Deployment](#verify-deployment)
+5. [Deploy Application](#deploy-application)
+6. [Access the Application](#access-the-application)
+7. [Monitoring](#monitoring)
+8. [Scaling](#scaling)
+9. [Free Tier Monitoring](#free-tier-monitoring)
+10. [Cleanup and Teardown](#cleanup-and-teardown)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Prerequisites
-
-Before you begin, ensure you have the following tools installed on your local machine:
 
 ### Required Software
 
@@ -31,14 +32,9 @@ Before you begin, ensure you have the following tools installed on your local ma
   aws --version  # Verify installation (v2.x.x or higher)
   ```
 
-- **kubectl**: [Download and install](https://kubernetes.io/docs/tasks/tools/)
-  ```bash
-  kubectl version --client  # Verify installation
-  ```
-
 - **Terraform**: [Download and install](https://www.terraform.io/downloads)
   ```bash
-  terraform version  # Verify installation (v1.0 or higher)
+  terraform version  # Verify installation (v1.6 or higher)
   ```
 
 - **Docker**: [Download and install](https://docs.docker.com/get-docker/)
@@ -46,20 +42,18 @@ Before you begin, ensure you have the following tools installed on your local ma
   docker --version  # Verify installation
   ```
 
-- **helm** (optional, for advanced deployments): [Download and install](https://helm.sh/docs/intro/install/)
+- **SSH Client**: For connecting to EC2 instances
 
 ### AWS Account Requirements
 
-- Active AWS account with appropriate permissions
-- IAM user or role with the following permissions:
-  - EC2 (VPC, Security Groups, Instances)
-  - ECS/EKS (Cluster creation and management)
+- Active AWS account (free tier eligible)
+- IAM user with permissions for:
+  - EC2 (VPC, Security Groups, Instances, Key Pairs)
   - RDS (Database provisioning)
-  - ECR (Container registry)
-  - IAM (Role creation)
-  - CloudFormation (for stack management)
+  - ElasticLoadBalancing (Application Load Balancer)
+  - CloudWatch (logs and monitoring)
   - S3 (for Terraform state)
-  - CloudWatch (for monitoring)
+  - IAM (instance profiles)
 
 ---
 
@@ -74,33 +68,15 @@ Before you begin, ensure you have the following tools installed on your local ma
 
 ### Step 2: Configure AWS CLI
 
-#### Option A: Interactive Configuration
-
 ```bash
 aws configure
 ```
 
 When prompted, enter:
-- AWS Access Key ID: `<your-access-key>`
-- AWS Secret Access Key: `<your-secret-key>`
-- Default region: `ap-south-1` (or your preferred region)
-- Default output format: `json`
-
-#### Option B: Environment Variables (Windows PowerShell)
-
-```powershell
-$env:AWS_ACCESS_KEY_ID = "<your-access-key>"
-$env:AWS_SECRET_ACCESS_KEY = "<your-secret-key>"
-$env:AWS_REGION = "ap-south-1"
-```
-
-#### Option C: Environment Variables (Linux/macOS)
-
-```bash
-export AWS_ACCESS_KEY_ID="<your-access-key>"
-export AWS_SECRET_ACCESS_KEY="<your-secret-key>"
-export AWS_REGION="ap-south-1"
-```
+- **AWS Access Key ID**: `<your-access-key>`
+- **AWS Secret Access Key**: `<your-secret-key>`
+- **Default region**: `us-east-1` (recommended for free tier)
+- **Default output format**: `json`
 
 ### Step 3: Verify AWS Credentials
 
@@ -121,68 +97,48 @@ Expected output:
 
 ## Infrastructure Provisioning with Terraform
 
-Terraform will provision the following AWS resources:
-- VPC with public and private subnets
-- EKS cluster
-- RDS PostgreSQL instance
-- ECR repository for Docker images
-- S3 bucket for remote state
+### Terraform Resources Created
+
+**Free Tier Eligible (750 hrs/month for 12 months):**
+- 2× EC2 t2.micro instances
+- RDS PostgreSQL db.t2.micro (20GB storage)
+- Application Load Balancer (ALB)
+- VPC with public subnets
+- Security Groups
+- S3 bucket for Terraform state
 - DynamoDB table for state locking
 
-### Step 1: Prepare Terraform Configuration
+**NOT Used (Not Free Tier):**
+- ❌ EKS (Kubernetes) - $0.10/hour
+- ❌ NAT Gateway - $0.45/hour + data charges
+- ❌ ECR (private container registry)
 
-Navigate to the Terraform directory:
+### Step 1: Navigate to Terraform Directory
 
 ```bash
 cd config/terraform
 ```
 
-### Step 2: Copy Configuration Templates
+### Step 2: Review Configuration
 
 ```bash
-# Create backend configuration (for remote state)
-cp backend.tf.example backend.tf
-
-# Create variables configuration
-cp terraform.tfvars.example terraform.tfvars
+cat terraform.tfvars
+cat main.tf
 ```
 
-### Step 3: Update terraform.tfvars
+### Step 3: Update terraform.tfvars (if needed)
 
-Edit `terraform.tfvars` and update the following variables:
+Edit `terraform.tfvars`:
 
 ```hcl
-# AWS Region
-aws_region = "ap-south-1"
-
-# Project identifier (used for resource naming)
-project_name = "slugapi"
-
-# Environment
-environment = "production"
-
-# Database configuration
-db_engine_version = "16.1"
-db_instance_class = "db.t3.micro"  # For production, consider db.t3.small or larger
-db_username = "slugadmin"
-db_password = "YourStrongPassword123!"  # Change this to a strong password
-
-# EKS configuration
-eks_node_count = 2  # Number of worker nodes
-eks_node_type = "t3.medium"  # Instance type for worker nodes
-
-# Container registry
-ecr_repository_name = "slugapi"
-
-# VPC configuration
-vpc_cidr = "10.0.0.0/16"
+aws_region        = "us-east-1"              # Best free tier coverage
+project_name      = "slugapi"
+environment       = "dev"
+vpc_cidr           = "10.20.0.0/16"
+postgres_password = "ChangeMe!SecurePass123" # CHANGE THIS!
 ```
 
-**Important Security Notes:**
-- Use a strong database password (min 8 characters, mixed case, numbers, special chars)
-- Never commit `terraform.tfvars` to version control (add to `.gitignore`)
-- Store passwords in AWS Secrets Manager after deployment
-- Enable encryption at rest for databases and volumes
+**⚠️ CRITICAL: Use a strong database password!**
 
 ### Step 4: Initialize Terraform
 
@@ -190,313 +146,250 @@ vpc_cidr = "10.0.0.0/16"
 terraform init
 ```
 
-This command will:
-- Download required Terraform providers
-- Configure the remote state backend
-- Initialize the working directory
-
 ### Step 5: Validate Configuration
 
 ```bash
 terraform validate
 ```
 
-Expected output: `Success! The configuration is valid.`
-
-### Step 6: Review Terraform Plan
+### Step 6: Preview Resources
 
 ```bash
-terraform plan -out=tfplan
+terraform plan
 ```
 
-This will display all resources that Terraform will create. Review the output carefully.
+Review output - should show:
+- 2 EC2 t2.micro instances
+- 1 RDS db.t2.micro
+- 1 Application Load Balancer
+- 1 VPC with public subnets
+- Security Groups
 
-### Step 7: Apply Terraform Configuration
+### Step 7: Apply Configuration
 
 ```bash
-terraform apply tfplan
+terraform apply -auto-approve
 ```
 
-**This will provision AWS resources. It may take 15-20 minutes.**
+⏱️ **Expected time**: 10-15 minutes
 
-Wait for the process to complete. Terraform will output important values:
-
+Monitor output for:
 ```
-Outputs:
-
-eks_cluster_name = "slugapi-eks"
-eks_cluster_endpoint = "https://XXXXXX.eks.amazonaws.com"
-ecr_repository_url = "XXXXXXXXX.dkr.ecr.ap-south-1.amazonaws.com/slugapi"
-rds_endpoint = "slugapi-db.XXXXX.rds.amazonaws.com"
+aws_instance.app[0]: Creating...
+aws_instance.app[1]: Creating...
+aws_db_instance.postgres: Creating...
+aws_lb.app: Creating...
+...
+Apply complete! Resources: 15 added
 ```
 
-**Save these outputs for the next steps.**
-
-### Step 8: Update kubeconfig
-
-Configure kubectl to access the newly created EKS cluster:
+### Step 8: Save Outputs
 
 ```bash
-aws eks update-kubeconfig --region ap-south-1 --name slugapi-eks
+terraform output
 ```
 
-Verify kubectl connectivity:
-
-```bash
-kubectl get nodes
+Save these values (you'll need them):
 ```
-
-Expected output: List of worker nodes with status `Ready`
-
----
-
-## Build and Push Docker Image to ECR
-
-### Step 1: Retrieve ECR Repository URL
-
-From Terraform outputs, get your ECR repository URL (format: `XXXXXXXXX.dkr.ecr.ap-south-1.amazonaws.com/slugapi`)
-
-### Step 2: Login to ECR
-
-```bash
-aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin <ECR_REPOSITORY_URL>
-```
-
-Expected output: `Login Succeeded`
-
-### Step 3: Build Docker Image
-
-Navigate to the config directory:
-
-```bash
-cd ../..  # or navigate to config/
-```
-
-Build the image:
-
-```bash
-docker build -f docker/Dockerfile -t slugapi:latest .
-```
-
-### Step 4: Tag Image for ECR
-
-```bash
-docker tag slugapi:latest <ECR_REPOSITORY_URL>:latest
-```
-
-Example:
-```bash
-docker tag slugapi:latest 123456789012.dkr.ecr.ap-south-1.amazonaws.com/slugapi:latest
-```
-
-### Step 5: Push Image to ECR
-
-```bash
-docker push <ECR_REPOSITORY_URL>:latest
-```
-
-Verify the image was pushed:
-
-```bash
-aws ecr describe-images --repository-name slugapi --region ap-south-1
-```
-
----
-
-## Deploy to EKS
-
-### Step 1: Update Kubernetes Manifests
-
-Edit `k8s/deployment.yml` and update the image reference:
-
-```yaml
-spec:
-  containers:
-  - name: slugapi
-    image: <ECR_REPOSITORY_URL>:latest  # Replace with your ECR URL
-```
-
-### Step 2: Create Kubernetes Namespace
-
-```bash
-kubectl apply -f k8s/namespace.yml
-```
-
-Verify:
-```bash
-kubectl get namespace slugapi-ns
-```
-
-### Step 3: Create Secrets and ConfigMaps
-
-Update `k8s/secret.yml` with sensitive data:
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: slugapi-secret
-  namespace: slugapi-ns
-type: Opaque
-stringData:
-  DJANGO_SECRET_KEY: "your-django-secret-key"
-  POSTGRES_PASSWORD: "your-postgres-password"
-  DEBUG: "False"
-```
-
-Apply secrets and configmaps:
-
-```bash
-kubectl apply -f k8s/secret.yml
-kubectl apply -f k8s/configmap.yml
-```
-
-### Step 4: Deploy PostgreSQL
-
-```bash
-kubectl apply -f k8s/postgres.yml
-```
-
-Wait for PostgreSQL to be ready:
-
-```bash
-kubectl get pods -n slugapi-ns -w
-```
-
-### Step 5: Deploy Redis
-
-```bash
-kubectl apply -f k8s/redis.yml
-```
-
-### Step 6: Deploy SlugTerraAPI Application
-
-```bash
-kubectl apply -f k8s/deployment.yml
-```
-
-### Step 7: Create Service
-
-```bash
-kubectl apply -f k8s/service.yml
-```
-
-### Step 8: Setup Ingress
-
-For EKS, you need to install the NGINX Ingress Controller first:
-
-```bash
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.0/deploy/static/provider/aws/deploy.yaml
-```
-
-Wait for the ingress controller to be ready:
-
-```bash
-kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=120s
-```
-
-Then apply your ingress manifest:
-
-```bash
-kubectl apply -f k8s/ingress.yml
-```
-
-### Step 9: Setup Auto-Scaling
-
-```bash
-kubectl apply -f k8s/hpa.yml
-```
-
----
-
-## Configure Kubernetes Resources
-
-### Step 1: Verify All Pods are Running
-
-```bash
-kubectl get pods -n slugapi-ns
-```
-
-Expected output: All pods should have status `Running`
-
-### Step 2: Run Database Migrations
-
-```bash
-kubectl exec -it deployment/slugapi -n slugapi-ns -- python manage.py migrate
-```
-
-### Step 3: Create Superuser (Optional)
-
-```bash
-kubectl exec -it deployment/slugapi -n slugapi-ns -- python manage.py createsuperuser
-```
-
-### Step 4: Check Logs
-
-```bash
-kubectl logs -f deployment/slugapi -n slugapi-ns
+load_balancer_dns = "slugapi-dev-alb-XXXX.us-east-1.elb.amazonaws.com"
+ec2_instance_ips = [
+  "XX.XX.XX.XX",
+  "YY.YY.YY.YY"
+]
+postgres_endpoint = "slugapi-dev-postgres.XXXXX.rds.amazonaws.com"
+postgres_port = 5432
 ```
 
 ---
 
 ## Verify Deployment
 
-### Step 1: Check Service Status
+### Step 1: SSH into an EC2 Instance
+
+Get an instance IP from the outputs above:
 
 ```bash
-kubectl get svc -n slugapi-ns
+ssh -i ~/.ssh/slugapi-dev.pem ubuntu@<instance-ip>
 ```
 
-Record the `EXTERNAL-IP` or `LOAD-BALANCER-INGRESS` from the service output.
-
-### Step 2: Get Ingress Address
-
+To create an SSH key pair:
 ```bash
-kubectl get ingress -n slugapi-ns
+aws ec2 create-key-pair --key-name slugapi-dev --region us-east-1 --query 'KeyMaterial' --output text > ~/.ssh/slugapi-dev.pem
+chmod 400 ~/.ssh/slugapi-dev.pem
 ```
 
-Record the address from the ingress output.
-
-### Step 3: Verify Pod Health
+### Step 2: Check Docker Installation
 
 ```bash
-kubectl get pods -n slugapi-ns -o wide
+sudo docker --version
+sudo docker-compose --version
 ```
 
-### Step 4: Check Resource Usage
+### Step 3: Verify Database Connectivity
 
 ```bash
-kubectl top nodes
-kubectl top pods -n slugapi-ns
+sudo apt-get install postgresql-client -y
+psql -h <postgres_endpoint> -U postgres -d slugdb -c "SELECT version();"
+```
+
+When prompted for password, enter your `postgres_password`
+
+---
+
+## Deploy Application
+
+### Option 1: Using Docker (Recommended)
+
+On one of the EC2 instances:
+
+```bash
+# Create app directory
+sudo mkdir -p /opt/slugapi
+cd /opt/slugapi
+
+# Clone your repository (adjust URL)
+sudo git clone https://github.com/yourusername/SlugTerraAPI.git .
+
+# Create .env file
+sudo tee .env > /dev/null << EOF
+DB_HOST=<postgres_endpoint>
+DB_PORT=5432
+DB_NAME=slugdb
+DB_USER=postgres
+DB_PASSWORD=<your-postgres-password>
+DEBUG=False
+ALLOWED_HOSTS=<load_balancer_dns>
+EOF
+
+# Build and run with docker-compose
+sudo docker-compose up -d
+```
+
+### Option 2: Manual Setup
+
+```bash
+# Update system
+sudo apt-get update && sudo apt-get upgrade -y
+
+# Install Python
+sudo apt-get install -y python3.12 python3-pip python3-venv postgresql-client
+
+# Setup application
+cd /opt/slugapi
+git clone https://github.com/yourusername/SlugTerraAPI.git .
+
+# Create virtual environment
+python3.12 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Set environment variables
+export DB_HOST=<postgres_endpoint>
+export DB_USER=postgres
+export DB_PASSWORD=<your-postgres-password>
+export DB_NAME=slugdb
+
+# Run migrations
+python manage.py migrate
+
+# Collect static files
+python manage.py collectstatic --noinput
+
+# Start with gunicorn
+gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 &
 ```
 
 ---
 
 ## Access the Application
 
-### Step 1: Get Load Balancer URL
+### Via Load Balancer (Recommended)
 
-```bash
-kubectl get ingress -n slugapi-ns --output wide
+```
+http://<load_balancer_dns>
 ```
 
-The `ADDRESS` column contains your application URL.
+Example: `http://slugapi-dev-alb-123456.us-east-1.elb.amazonaws.com`
 
-### Step 2: Access API Endpoints
+### Direct to EC2 (Testing)
 
-Replace `<LOAD_BALANCER_URL>` with the URL from above:
+```
+http://<instance-ip>:8000
+```
 
-- **Home**: http://\<LOAD_BALANCER_URL\>/
-- **API Documentation (Swagger)**: http://\<LOAD_BALANCER_URL\>/swagger/
-- **API Documentation (ReDoc)**: http://\<LOAD_BALANCER_URL\>/redoc/
-- **List Slugs**: http://\<LOAD_BALANCER_URL\>/api/slugs/
-- **Admin Panel**: http://\<LOAD_BALANCER_URL\>/admin/
+---
 
-### Step 3: Test API Connectivity
+## Monitoring
+
+### CloudWatch Logs
+
+View instance logs:
+```bash
+aws ec2 describe-instance-status --instance-ids <instance-id> --region us-east-1
+```
+
+### EC2 Health
 
 ```bash
-curl http://<LOAD_BALANCER_URL>/
+aws ec2 describe-instances --instance-ids <instance-id> --region us-east-1
 ```
+
+### ALB Health
+
+```bash
+aws elbv2 describe-target-health --target-group-arn <target-group-arn> --region us-east-1
+```
+
+### RDS Monitoring
+
+```bash
+aws rds describe-db-instances --db-instance-identifier slugapi-dev-postgres --region us-east-1
+```
+
+---
+
+## Scaling
+
+### Add More EC2 Instances
+
+Edit `config/terraform/main.tf`:
+
+```hcl
+resource "aws_instance" "app" {
+  count = 3  # Increase from 2 to 3
+  ...
+}
+```
+
+Apply changes:
+```bash
+terraform apply -auto-approve
+```
+
+---
+
+## Free Tier Monitoring
+
+### Check Current Usage
+
+```bash
+# Open AWS Console:
+# Billing → Billing Dashboard → Free Tier Dashboard
+```
+
+### Cost Breakdown (12 Months Free Tier)
+
+| Resource | Monthly Cost | Free Tier | Duration |
+|----------|---------|-----------|----------|
+| 2× t2.micro EC2 | $15.36 | 1,500 hrs | 12 mo |
+| db.t2.micro RDS | $31.36 | 750 hrs + 20GB | 12 mo |
+| ALB | $22.50 | Included | 12 mo |
+| VPC/SG | $0 | FREE | - |
+| **Total** | **$69.22** | **FREE** | **12 mo** |
+
+**After 12 months**: ~$69/month for continued operation
 
 Expected: JSON response with API information
 
@@ -604,257 +497,91 @@ Check if your deployment qualifies for AWS Free Tier benefits:
 **Always Free Services:**
 - **ECR**: 500 MB storage
 - **CloudWatch**: 10 custom metrics
-- **CloudTrail**: 1 trail (read-only events)
+---
 
-### Minimal-Cost Configuration for Testing
+## Cleanup and Teardown
 
-For development and testing, use this cost-optimized `terraform.tfvars`:
+⚠️ **IMPORTANT**: Destroy resources when not in use to avoid charges after free tier ends.
 
-```hcl
-# Minimal-cost configuration
-aws_region = "us-free-tier-eligible-region"  # Use us-east-1 for best free tier coverage
-
-# Database - Smallest free tier eligible instance
-db_instance_class = "db.t3.micro"
-db_engine_version = "16.1"
-db_username = "slugadmin"
-db_password = "YourStrongPassword123!"
-
-# EKS - Minimal nodes
-eks_node_count = 1                    # Single node (minimum)
-eks_node_type = "t3.micro"           # Burstable, lowest cost
-
-# ECR
-ecr_repository_name = "slugapi"
-
-# VPC - Single AZ only
-vpc_cidr = "10.0.0.0/16"
-availability_zones = ["us-east-1a"]  # Use single AZ to avoid NAT gateway charges
-```
-
-**Estimated Monthly Cost (Minimal Configuration):**
-- EKS Cluster: $73.00
-- 1x t3.micro EC2 node: $7.50
-- RDS db.t3.micro: $15.00
-- ECR storage (first 500 MB): Free
-- Data transfer: ~$1-5 (depends on traffic)
-- **Total**: ~$96-101/month (subject to free tier eligibility)
-
-### Recommended Production Configuration
-
-For production with modest traffic, use this configuration:
-
-```hcl
-aws_region = "ap-south-1"  # Lower pricing in some regions
-
-db_instance_class = "db.t3.small"    # Minimum recommended for production
-eks_node_count = 2
-eks_node_type = "t3.small"
-
-vpc_cidr = "10.0.0.0/16"
-```
-
-**Estimated Monthly Cost (Production Configuration):**
-- EKS Cluster: $73.00
-- 2x t3.small EC2 nodes: $30.00 ($15 each)
-- RDS db.t3.small: $30.00
-- Data transfer: ~$5-20
-- Monitoring (CloudWatch): ~$10-15
-- **Total**: ~$150-190/month
-
-### Cost Monitoring Commands
-
-#### Step 1: Enable AWS Cost Alerts
-
-Set up billing alerts:
+### Destroy All Infrastructure
 
 ```bash
-# Create SNS topic for cost alerts
-aws sns create-topic --name slugapi-cost-alerts --region us-east-1
-
-# Note the TopicArn from output
-# Then manually configure billing alerts in AWS Console:
-# Billing → Preferences → Alert Preferences
+cd config/terraform
+terraform destroy -auto-approve
 ```
 
-#### Step 2: Check Current Spending
+This will terminate:
+- 2 EC2 instances
+- RDS database
+- Application Load Balancer
+- VPC and subnets
+- Security groups
 
+---
+
+## Troubleshooting
+
+### Issue: EC2 instances stuck in "initializing"
+
+Check user data logs:
 ```bash
-# View current month's cost estimate
-aws ce get-cost-and-usage \
-  --time-period Start=2026-05-01,End=2026-05-02 \
-  --granularity DAILY \
-  --metrics "UnblendedCost" \
-  --group-by Type=DIMENSION,Key=SERVICE \
-  --region us-east-1
+ssh -i ~/.ssh/slugapi-dev.pem ubuntu@<instance-ip>
+tail -f /var/log/user_data.log
 ```
 
-#### Step 3: Estimate Monthly Costs by Service
+### Issue: Cannot connect to RDS from EC2
 
+1. Verify security group allows port 5432:
 ```bash
-# Cost breakdown by AWS service
-aws ce get-cost-and-usage \
-  --time-period Start=2026-04-01,End=2026-05-01 \
-  --granularity MONTHLY \
-  --metrics "UnblendedCost" \
-  --group-by Type=DIMENSION,Key=SERVICE \
-  --region us-east-1 \
-  --query 'ResultsByTime[0].Groups' \
-  --output table
+aws ec2 describe-security-groups --group-ids <rds-sg-id> --region us-east-1
 ```
 
-#### Step 4: View Cost by Resource Tags
-
-Tag all resources and track costs:
-
+2. Test connectivity:
 ```bash
-# List all resources and their costs
-aws ce get-cost-and-usage \
-  --time-period Start=2026-04-01,End=2026-05-01 \
-  --granularity MONTHLY \
-  --metrics "UnblendedCost" \
-  --group-by Type=TAG,Key=Environment \
-  --region us-east-1
+ssh -i ~/.ssh/slugapi-dev.pem ubuntu@<instance-ip>
+sudo apt-get install postgresql-client -y
+psql -h <postgres_endpoint> -U postgres -c "SELECT 1;"
 ```
 
-### Cost-Saving Strategies
+### Issue: ALB not routing traffic
 
-#### 1. Scale Down When Not in Use
-
-Reduce replicas during off-hours:
-
+1. Check target group health:
 ```bash
-# Scale down to 1 replica for development
-kubectl scale deployment/slugapi --replicas=1 -n slugapi-ns
-
-# Scale down PostgreSQL (not recommended for production)
-kubectl scale deployment/postgres --replicas=0 -n slugapi-ns
-
-# Or delete entire cluster for extended downtime
-terraform destroy
+aws elbv2 describe-target-health --target-group-arn <target-group-arn> --region us-east-1
 ```
 
-#### 2. Use Reserved Instances (RI)
-
-Reserve capacity for 1-year or 3-year terms (30-70% discount):
-
+2. Verify security group allows port 8000:
 ```bash
-# Command-line reservation purchase not supported; use AWS Console:
-# EC2 → Reserved Instances → Purchase Reserved Instances
-# Select: t3.micro, 1-year, All Upfront (best discount)
+aws ec2 describe-security-groups --group-ids <ec2-sg-id> --region us-east-1
 ```
 
-#### 3. Use Spot Instances for Non-Critical Workloads
+### Issue: Application error after deployment
 
-Save up to 90% on EC2 costs:
-
-```hcl
-# Update Terraform configuration to use Spot instances
-# In your Terraform worker node configuration:
-
-spot_price = "0.03"  # Max price you'll pay
-instance_interruption_behavior = "terminate"
-
-# Note: Not suitable for production critical services
-```
-
-#### 4. Right-Size Your Resources
-
-Current configuration analysis:
-
+SSH to instance and check logs:
 ```bash
-# Check actual CPU and memory usage
-kubectl top nodes
-kubectl top pods -n slugapi-ns
-
-# If mostly idle, downsize instances:
-# t3.small → t3.micro (50% cost reduction)
-# db.t3.small → db.t3.micro (50% cost reduction)
+ssh -i ~/.ssh/slugapi-dev.pem ubuntu@<instance-ip>
+docker logs -f <container-name>
+# or
+tail -f /opt/slugapi/app.log
 ```
 
-#### 5. Delete Unused Resources
+### Issue: Out of free tier hours
 
+Monitor usage:
 ```bash
-# List unattached EBS volumes
-aws ec2 describe-volumes --filters Name=status,Values=available --region ap-south-1
-
-# Delete unattached volumes
-aws ec2 delete-volume --volume-id vol-XXXXX --region ap-south-1
-
-# List unused Elastic IPs
-aws ec2 describe-addresses --filters Name=association-id,Values= --region ap-south-1
-
-# Release unused Elastic IP
-aws ec2 release-address --allocation-id eipalloc-XXXXX --region ap-south-1
+aws ec2 describe-account-attributes --attribute-names supported-platforms --region us-east-1
 ```
 
-#### 6. Use Data Transfer Optimization
+---
 
-Minimize egress charges (most expensive):
+## References
 
-```bash
-# Monitor data transfer costs
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/EC2 \
-  --metric-name NetworkOut \
-  --start-time 2026-04-01T00:00:00Z \
-  --end-time 2026-05-01T00:00:00Z \
-  --period 86400 \
-  --statistics Sum \
-  --region ap-south-1
-
-# Recommendations:
-# - Use CloudFront for image delivery
-# - Keep database in same AZ as compute
-# - Use S3 Gateway Endpoint to avoid NAT Gateway charges
-```
-
-#### 7. Enable S3 Lifecycle Policies
-
-Auto-delete old logs and backups:
-
-```bash
-# Create lifecycle policy for S3 buckets storing logs
-aws s3api put-bucket-lifecycle-configuration \
-  --bucket slugapi-logs \
-  --lifecycle-configuration '{
-    "Rules": [
-      {
-        "ID": "DeleteOldLogs",
-        "Status": "Enabled",
-        "Prefix": "logs/",
-        "Expiration": {"Days": 30}
-      }
-    ]
-  }' \
-  --region ap-south-1
-```
-
-#### 8. Use RDS Automatic Backups Retention
-
-Limit backup storage costs:
-
-```bash
-# Reduce backup retention to 7 days (from 30)
-aws rds modify-db-instance \
-  --db-instance-identifier slugapi-db \
-  --backup-retention-period 7 \
-  --apply-immediately \
-  --region ap-south-1
-```
-
-### Alternative Cost-Saving Deployment Options
-
-#### Option 1: Use ECS Fargate Instead of EKS
-
-**Pros:**
-- No EC2 instance management
-- Pay only for compute capacity used
-- Better for variable traffic
-
-**Cons:**
-- Less flexible than Kubernetes
-- Cold start latency
+- [AWS Free Tier](https://aws.amazon.com/free/)
+- [Free Tier FAQ](https://aws.amazon.com/free/free-tier-faq/)
+- [EC2 Pricing](https://aws.amazon.com/ec2/pricing/on-demand/)
+- [RDS Pricing](https://aws.amazon.com/rds/pricing/)
+- [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+- [Django Deployment](https://docs.djangoproject.com/en/stable/howto/deployment/)
 
 **Estimated Cost:** $50-80/month (vs $150-190 with EKS)
 
@@ -1065,16 +792,11 @@ aws dynamodb scan --table-name slugapi-tf-locks --region ap-south-1
 
 ### Issue: kubectl Commands Fail with "Unable to Connect to Server"
 
-**Cause**: kubeconfig not updated or cluster unreachable
+**Cause**: No Kubernetes cluster configured or kubeconfig not present.
 
-**Solution**:
-```bash
-# Update kubeconfig
-aws eks update-kubeconfig --region ap-south-1 --name slugapi-eks
+**Note**: This repository no longer provisions EKS clusters as part of the default free-tier workflow. If you still need to use an existing EKS cluster, follow the official AWS EKS documentation to update kubeconfig manually.
 
-# Verify connection
-kubectl cluster-info
-```
+**If you're using EC2/docker deployment**: verify the app on EC2 directly (SSH + Docker logs) or use the load balancer DNS in your browser.
 
 ### Issue: Cannot Push Image to ECR
 
