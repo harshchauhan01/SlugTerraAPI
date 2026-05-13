@@ -1,4 +1,4 @@
-# SlugTerraAPI
+﻿# SlugTerraAPI
 
 A Django REST API for browsing SlugTerra slug data, running slug duel simulations, and viewing summary statistics.
 
@@ -318,141 +318,63 @@ kubectl delete -f k8s/namespace.yml
 
 ## CI/CD Pipeline (Jenkins)
 
-This repository provides a Jenkins Pipeline at `config/Jenkinsfile`. The pipeline performs:
+This repository provides a Jenkins Pipeline at `config/Jenkinsfile`. The current pipeline is intentionally simple and matches the repository's Docker-based delivery flow:
 
-- Git checkout
-- Install Python dependencies and run unit tests
-- Static analysis and security scans (flake8, bandit)
-- Build Docker image and push to a registry
-- Run Terraform plan (and optional apply in controlled environments)
-- Deploy to a target (local `kind` or AWS via Terraform)
+- Checkout the repository
+- Build the Docker image from `docker/Dockerfile`
+- Log in to Docker Hub with Jenkins credentials
+- Push the image to Docker Hub as `harshchauhan01/slug-api:latest`
 
-Below are step-by-step instructions for a new Jenkins user to set up a working pipeline and the exact UI options to choose.
+### What Jenkins needs
 
-Prerequisites
-- A running Jenkins instance reachable from your network (local: http://127.0.0.1:8080).
-- Admin access to Jenkins to install plugins and add credentials.
-- A Git repository URL for this project (HTTPS or SSH).
-- Use
-```bash
-docker run -d \
-  --name jenkins \
-  -p 8080:8080 \
-  -p 50000:50000 \
-  -v jenkins_home:/var/jenkins_home \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v $(which docker):/usr/bin/docker \
-  jenkins/jenkins:lts
-```
+- A Jenkins instance with Docker installed on the agent or controller that runs the job
+- Access to the repository that contains this project
+- A Jenkins credential with ID `dockerhub-credentials`
+- Permission for Jenkins to run `docker build`, `docker login`, and `docker push`
 
+### Jenkins job setup
 
-Recommended Jenkins plugins
-- Pipeline
-- Git Plugin
-- GitHub Plugin (or GitLab Plugin if using GitLab)
-- GitHub Branch Source (for Multibranch Pipelines)
-- Credentials Binding
-- Docker Pipeline
-- Kubernetes CLI Plugin (if deploying to k8s clusters)
-- Workspace Cleanup
-- Blue Ocean (optional, nice UI)
+1. Create a new Pipeline job in Jenkins.
+2. Set the job to use `Pipeline script from SCM`.
+3. Select `Git` as the SCM.
+4. Point the repository URL to this project.
+5. Set the Branch Specifier to the branch you want to build, such as `*/main`.
+6. Set the Script Path to `config/Jenkinsfile`.
+7. Save the job.
 
-Create required credentials in Jenkins (recommended locations shown)
-1. Jenkins > Credentials > System > Global credentials (unrestricted) > Add Credentials
-   - Docker Hub / Registry
-     - Kind: Username with password
-     - Username: <your-docker-username>
-     - Password: <your-docker-password or token>
-     - ID: dockerhub-credentials
-   - Git / SSH (if using SSH for repo access)
-     - Kind: SSH Username with private key
-     - Username: git (or the repo user)
-     - Private Key: Enter directly (paste your private key)
-     - ID: git-ssh-key
-   - GitHub / GitLab token (optional, for API access and webhooks)
-     - Kind: Secret text
-     - Secret: <personal-access-token>
-     - ID: github-token
-   - Kubernetes kubeconfig (optional, for deployment stage)
-     - Kind: Secret file
-     - File: paste kubeconfig
-     - ID: kubeconfig-file
+### Webhook trigger on push
 
+To run Jenkins automatically after every push, configure a GitHub webhook and enable the SCM trigger in Jenkins:
 
-Create a Pipeline job (single-branch) — exact UI steps
-1. Jenkins > New Item
-2. Enter an item name (e.g., `slugterra-api-pipeline`) and choose `Pipeline`, then click OK.
-3. In the job configuration:
-   - General
-     - (Optional) Check `Discard old builds` and set `Max # of builds to keep` to a small number (e.g., 10).
-   - Build Triggers
-     - Check `GitHub hook trigger for GITScm polling` (if using GitHub) OR
-     - Check `Poll SCM` and leave schedule blank if you will use webhooks.
-   - Pipeline
-     - Definition: select `Pipeline script from SCM`
-     - SCM: select `Git`
-     - Repository URL: paste the HTTPS or SSH URL for this repo.
-     - Credentials: select the credential you created (or `None` for public repos).
-     - Branch Specifier: `*/main` (or `*/master` / `*/develop` as appropriate).
-     - Script Path: `config/Jenkinsfile` (important — this repository keeps the Jenkinsfile in the `config/` folder)
-     - (Optional) Check `Lightweight checkout` to speed up Jenkinsfile retrieval where supported by your SCM plugin.
-     - (Optional) Under `Additional Behaviours` add `Wipe out repository & force clone` (recommended to avoid dirty workspaces).
-4. Save the job.
+1. In Jenkins, open the job configuration and enable `GitHub hook trigger for GITScm polling`.
+2. In GitHub, open the repository settings and add a webhook.
+3. Set the Payload URL to `http://<JENKINS_HOST>/github-webhook/`.
+4. Set Content type to `application/json`.
+5. Choose `Just the push event` so each push triggers a new Jenkins build.
 
-If you do not see the `Pipeline script from SCM` option or Git fields:
-- Install or update the following plugins: `Git plugin`, `Pipeline`, `Pipeline: SCM Step`, and (for GitHub) `GitHub Plugin`.
-- After installing plugins, restart Jenkins if prompted and revisit the job configuration.
+With this setup, every push to the configured branch will notify Jenkins, Jenkins will read `config/Jenkinsfile`, and the pipeline will rebuild and push the image automatically.
 
-Webhook setup (GitHub example)
-1. In your GitHub repository, go to `Settings` > `Webhooks` > `Add webhook`.
-2. Payload URL: `http://<JENKINS_HOST>/github-webhook/` (e.g., `http://jenkins.example.com/github-webhook/`).
-3. Content type: `application/json`.
-4. Secret: optional — if set, configure the same secret in Jenkins GitHub plugin settings.
-5. Which events would you like to trigger this webhook? Select `Just the push event` (and `Pull requests` if you want PR scanning).
-6. Click `Add webhook`.
+### Pipeline credentials
 
-Notes for GitLab: use the GitLab plugin and add a webhook URL `http://<JENKINS_HOST>/project/<JOB_NAME>` or use the GitLab Branch Source for Multibranch.
+The Jenkinsfile expects the Docker Hub credential ID to be `dockerhub-credentials`.
 
-Common UI options and checkboxes explained
-- `Discard old builds` (General): keeps Jenkins storage tidy.
-- `Lightweight checkout` (Pipeline from SCM / Multibranch): fetches only Jenkinsfile metadata instead of full repository where supported — recommended.
-- `Wipe out repository & force clone` / `Clean before checkout`: prevents stale files interfering with builds.
-- `GitHub hook trigger for GITScm polling` (Build Triggers): use this with GitHub webhooks so Jenkins builds on push.
-- `Poll SCM`: runs periodic polling (useful if webhooks are not possible). Schedule field uses CRON syntax.
+### Practical note
 
-Common credential IDs used by the `config/Jenkinsfile` pipeline
-- `dockerhub-credentials` — Docker registry username/password or token
-- `github-token` — (optional) GitHub API token for interacting with GitHub from the pipeline
-- `kubeconfig-file` — (optional) secret file credential that the deploy stage uses
-
-Agent/runner considerations
-- If your pipeline builds Docker images, use an agent with Docker available or use Docker-in-Docker. On Linux, a common approach is to run builds on a node with Docker Engine installed and add that node label to the job.
-- Ensure `python3`, `pip`, and any system packages required for tests are present on the agent (or build them inside Docker stages).
-
-Sample minimal troubleshooting checklist
-- Jenkins fails to clone: verify repository URL and credentials, test `ssh -T git@github.com` from the agent if using SSH.
-- Docker push fails: verify `dockerhub-credentials` ID and that the registry URL in pipeline matches the credential scope.
-- Webhook triggers not received: confirm Jenkins is reachable from GitHub (public URL or tunnel via ngrok), and that `github-webhook/` endpoint is enabled by the GitHub plugin.
-
-If you want, I can also:
-- Add a short `docs/jenkins-setup.md` file with screenshots and exact menu paths.
-- Update the pipeline `config/Jenkinsfile` to read credential IDs from environment variables with defaults.
-
+Because this pipeline only builds and pushes the image, the Kubernetes deployment step happens separately on your cluster by applying the manifests in `config/k8s`.
 
 ## Infrastructure as Code and AWS Deployment
 
-For detailed step-by-step instructions on deploying SlugTerraAPI to AWS using Terraform, ECR, and EKS, please refer to:
+For detailed step-by-step instructions on deploying SlugTerraAPI to AWS with the current kubeadm-on-EC2 setup, please refer to:
 
 **[AWS Deployment Guide](docs/aws.md)**
 
 The AWS deployment guide covers:
 - AWS prerequisites and credential setup
-- Infrastructure provisioning with Terraform
-- Building and pushing Docker images to ECR
-- Deploying to EKS
-- Configuring Kubernetes resources
-- Monitoring and alerting setup
-- Scaling and auto-recovery
+- Terraform provisioning for the 3-node EC2 cluster in `config/terraform1`
+- kubeadm bootstrap with containerd and Calico
+- Deploying the Kubernetes manifests from `config/k8s`
+- Pulling the application image from Docker Hub
+- Ingress and storage notes for bare kubeadm clusters
 - Cleanup and teardown procedures
 - Troubleshooting common issues
 
@@ -694,3 +616,6 @@ Contributions are welcome.
 3. Make your changes with clear commit messages.
 4. Add or update tests/docs where relevant.
 5. Open a pull request describing what changed and why.
+
+
+
