@@ -333,6 +333,18 @@ Prerequisites
 - A running Jenkins instance reachable from your network (local: http://127.0.0.1:8080).
 - Admin access to Jenkins to install plugins and add credentials.
 - A Git repository URL for this project (HTTPS or SSH).
+- Use
+```bash
+docker run -d \
+  --name jenkins \
+  -p 8080:8080 \
+  -p 50000:50000 \
+  -v jenkins_home:/var/jenkins_home \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v $(which docker):/usr/bin/docker \
+  jenkins/jenkins:lts
+```
+
 
 Recommended Jenkins plugins
 - Pipeline
