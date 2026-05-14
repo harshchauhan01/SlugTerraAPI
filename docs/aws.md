@@ -83,6 +83,11 @@ Your app is already defined in Kubernetes manifests under `config/k8s`:
 - `ingress.yml`
 - `hpa.yml`
 
+Use:
+```
+scp -i your-key.pem -r k8s ubuntu@<MASTER_PUBLIC_IP>:~
+```
+
 The Deployment already points to the Docker Hub image in `config/k8s/deployment.yml`:
 
 ```yaml

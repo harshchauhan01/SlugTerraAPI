@@ -160,7 +160,7 @@ resource "aws_instance" "master" {
   key_name               = var.key_name
   iam_instance_profile = aws_iam_instance_profile.profile.name
 
-  user_data = file("scripts/master.sh")
+  user_data = replace(file("scripts/master.sh"), "TERRAFORM_AWS_REGION", var.aws_region)
 
   tags = {
     Name = "slugapp-master"
@@ -181,9 +181,10 @@ resource "aws_instance" "worker1" {
   key_name               = var.key_name
   iam_instance_profile = aws_iam_instance_profile.profile.name
 
-  user_data = templatefile("scripts/worker.sh", {
-    master_ip = aws_instance.master.private_ip
-  })
+  user_data = replace(
+    replace(file("scripts/worker.sh"), "TERRAFORM_MASTER_IP", aws_instance.master.private_ip),
+    "TERRAFORM_AWS_REGION", var.aws_region
+  )
 
   tags = {
     Name = "slugapp-worker-1"
@@ -205,9 +206,10 @@ resource "aws_instance" "worker2" {
   key_name               = var.key_name
   iam_instance_profile = aws_iam_instance_profile.profile.name
 
-  user_data = templatefile("scripts/worker.sh", {
-    master_ip = aws_instance.master.private_ip
-  })
+  user_data = replace(
+    replace(file("scripts/worker.sh"), "TERRAFORM_MASTER_IP", aws_instance.master.private_ip),
+    "TERRAFORM_AWS_REGION", var.aws_region
+  )
 
   tags = {
     Name = "slugapp-worker-2"

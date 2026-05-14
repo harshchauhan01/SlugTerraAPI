@@ -17,6 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.http import FileResponse, Http404
 from django.urls import include, path, re_path
+from django_prometheus import exports as prometheus_exports
 from django.conf import settings
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 
@@ -48,6 +49,9 @@ schema_view = get_schema_view(
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('slugs.urls')),
+    # Explicit metrics endpoints (both with and without trailing slash)
+    path('metrics', prometheus_exports.ExportToDjangoView, name='prometheus-metrics-no-slash'),
+    path('metrics/', prometheus_exports.ExportToDjangoView, name='prometheus-metrics'),
     path('', include('django_prometheus.urls')),
     path('favicon.ico', favicon),
     path('', home),

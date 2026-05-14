@@ -10,6 +10,8 @@ echo "========== STARTING MASTER SETUP =========="
 
 export DEBIAN_FRONTEND=noninteractive
 
+# Template variable provided by Terraform: TERRAFORM_AWS_REGION
+
 # ---------------------------------------------------
 # System Update
 # ---------------------------------------------------
@@ -23,7 +25,14 @@ apt-get install -y \
   gnupg \
   lsb-release \
   software-properties-common \
-  awscli
+  unzip
+
+# Install AWS CLI v2
+if ! command -v aws >/dev/null 2>&1; then
+  curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+  unzip -o /tmp/awscliv2.zip -d /tmp
+  /tmp/aws/install || true
+fi
 
 # ---------------------------------------------------
 # Disable Swap
@@ -157,6 +166,9 @@ done'
 
 echo "Kubernetes API is ready"
 
+# Give the API server a few more seconds to stabilize internal components
+sleep 30
+
 # ---------------------------------------------------
 # Install Calico
 # ---------------------------------------------------
@@ -166,11 +178,38 @@ kubectl apply -f \
 https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/calico.yaml
 "
 
+# Give Calico time to initialize
+sleep 15
+
+# ---------------------------------------------------
+# Helper: retry function
+# ---------------------------------------------------
+retry() {
+  local -r -i max_attempts=${1:-6}; shift
+  local -r cmd=("$@")
+  local -i attempt=1
+  local sleep_time=5
+  until "${cmd[@]}"; do
+    if (( attempt >= max_attempts )); then
+      echo "Command failed after ${attempt} attempts: ${cmd[*]}" >&2
+      return 1
+    fi
+    echo "Command failed, retrying in ${sleep_time}s..." >&2
+    sleep ${sleep_time}
+    attempt=$(( attempt + 1 ))
+    sleep_time=$(( sleep_time * 2 ))
+  done
+}
+
 # ---------------------------------------------------
 # Generate Join Command
 # ---------------------------------------------------
 
+echo "Generating join command..."
+
 JOIN_CMD=$(kubeadm token create --print-join-command)
+
+echo "Join command generated: ${JOIN_CMD}"
 
 echo "${JOIN_CMD}" > /home/ubuntu/join.sh
 
@@ -179,15 +218,17 @@ chmod +x /home/ubuntu/join.sh
 chown ubuntu:ubuntu /home/ubuntu/join.sh
 
 # ---------------------------------------------------
-# Store Join Command In AWS SSM
+# Store Join Command In AWS SSM (with retries)
 # ---------------------------------------------------
 
-aws ssm put-parameter \
+echo "Storing join command to SSM in region TERRAFORM_AWS_REGION"
+
+retry 8 aws ssm put-parameter \
   --name "/k8s/join-command" \
   --value "${JOIN_CMD}" \
   --type "String" \
   --overwrite \
-  --region us-east-1
+  --region TERRAFORM_AWS_REGION
 
 echo "Join command stored in SSM"
 
@@ -195,8 +236,8 @@ echo "Join command stored in SSM"
 # Validation
 # ---------------------------------------------------
 
-kubectl --kubeconfig=/etc/kubernetes/admin.conf get nodes
+kubectl --kubeconfig=/etc/kubernetes/admin.conf get nodes || true
 
-kubectl --kubeconfig=/etc/kubernetes/admin.conf get pods -A
+kubectl --kubeconfig=/etc/kubernetes/admin.conf get pods -A || true
 
 echo "========== MASTER SETUP COMPLETED =========="

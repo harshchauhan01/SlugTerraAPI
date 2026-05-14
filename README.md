@@ -325,6 +325,22 @@ This repository provides a Jenkins Pipeline at `config/Jenkinsfile`. The current
 - Log in to Docker Hub with Jenkins credentials
 - Push the image to Docker Hub as `harshchauhan01/slug-api:latest`
 
+![Jenkins Stage View](sample_img/jenkins_stage_view.png)
+
+Use
+```
+docker rm -f jenkins
+
+docker run -d \
+  --name jenkins \
+  --restart unless-stopped \
+  -p 8090:8080 \
+  -p 50000:50000 \
+  -v jenkins_home:/var/jenkins_home \
+  jenkins/jenkins:lts
+```
+
+
 ### What Jenkins needs
 
 - A Jenkins instance with Docker installed on the agent or controller that runs the job
@@ -390,6 +406,18 @@ Monitoring manifests are in `k8s/monitoring/` and include:
 - Alert rules config (`prometheus-alerts-configmap.yml`)
 - Grafana deployment, datasource, and dashboard provisioning
 
+### Prometheus Dashboard
+
+![Prometheus](sample_img/prometheus.png)
+
+### Grafana Dashboards
+
+![Grafana Node Dashboard](sample_img/grafana_node_dashboard.png)
+
+![Grafana PostgreSQL Dashboard](sample_img/grafana_postgres_dashboard.png)
+
+![Grafana Redis Dashboard](sample_img/grafana_redis_dashboard.png)
+
 Apply monitoring stack:
 
 ```bash
@@ -410,6 +438,11 @@ Grafana default login:
 
 - Username: admin
 - Password: admin
+
+For Dashboard Use:
+- Node Exporter: Import ID (1860)
+- PostgreSQL Exporter: Import ID (12485)
+- Redis Exporter: Import ID (14091)
 
 ## API Documentation UI
 
